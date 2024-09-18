@@ -17,7 +17,8 @@ export default async function handler(req, res) {
                 body: JSON.stringify({
                     auth_code: code,
                     client_id: clientId,
-                    client_secret: clientSecret
+                    client_secret: clientSecret,
+                    conversationId: 'conv_01J82FTZNZEP72YQFKANNZNMFK'
                 })
             });
 
