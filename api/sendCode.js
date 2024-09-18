@@ -1,12 +1,13 @@
-const fetch = require('node-fetch');
-
-module.exports = async function handler(req, res) {
+// Use dynamic import() for node-fetch
+export default async function handler(req, res) {
     if (req.method === 'POST') {
         const { code } = req.body;
 
         if (!code) {
             return res.status(400).json({ success: false, message: 'Authorization code is required' });
         }
+
+        const fetch = (await import('node-fetch')).default;
 
         const webhookUrl = process.env.BOTPRESS_WEBHOOK_URL;
         const clientId = process.env.STRAVA_CLIENT_ID;
