@@ -17,13 +17,13 @@ export default async function handler(req, res) {
                 return res.status(500).json({ success: false, message: 'Missing environment variables' });
             }
 
+            // Prepare the payload with the authorization code
             const payload = {
                 code,
-                client_id: clientId,
-                client_secret: clientSecret,
-                conversationId: 'conv_01J82N4J2B67NMC1TA2MR198RF'
+                conversationId: 'conv_01J82FTZNZEP72YQFKANNZNMFK'
             };
 
+            // Send the POST request to the webhook
             const response = await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -34,23 +34,19 @@ export default async function handler(req, res) {
             console.log('Response Status:', response.status);
             console.log('Response Headers:', response.headers.raw());
 
-            // Check if the response is OK
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+            // Handle response
+            const contentType = response.headers.get('Content-Type');
+            let data;
+            if (contentType && contentType.includes('application/json')) {
+                const text = await response.text();
+                data = text ? JSON.parse(text) : {};
+            } else {
+                data = await response.text();
             }
 
-            // Check if the response has a body and parse it
-            const contentType = response.headers.get('Content-Type');
-            if (contentType && contentType.includes('application/json')) {
-                const data = await response.json();
-                res.status(200).json({ success: true, data });
-            } else {
-                // Handle non-JSON responses
-                const text = await response.text();
-                res.status(200).json({ success: true, data: text });
-            }
+            res.status(200).json({ success: true, data });
         } catch (error) {
-            console.error('Error:', error); // Log the error to the server logs
+            console.error('Error:', error);
             res.status(500).json({ success: false, message: 'Failed to send POST request to webhook', error: error.message });
         }
     } else {
