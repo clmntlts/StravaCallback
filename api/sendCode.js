@@ -20,7 +20,7 @@ export default async function handler(req, res) {
             // Prepare the payload with the authorization code
             const payload = {
                 code,
-                conversationId: 'conv_01J82FTZNZEP72YQFKANNZNMFK'
+                conversationId: 'conv_01J82NDJEFRDGWFYR2XRJWRVNG'
             };
 
             // Send the POST request to the webhook
