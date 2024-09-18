@@ -21,7 +21,7 @@ export default async function handler(req, res) {
                 code,
                 client_id: clientId,
                 client_secret: clientSecret,
-                conversationId: 'conv_01J82MRFVTBN66901QPWB97KZX'
+                conversationId: 'conv_01J82FTZNZEP72YQFKANNZNMFK'
             };
 
             const response = await fetch(webhookUrl, {
@@ -30,12 +30,16 @@ export default async function handler(req, res) {
                 body: JSON.stringify(payload)
             });
 
+            // Log response details
+            console.log('Response Status:', response.status);
+            console.log('Response Headers:', response.headers.raw());
+
             // Check if the response is OK
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
 
-            // Check if the response has a body
+            // Check if the response has a body and parse it
             const contentType = response.headers.get('Content-Type');
             if (contentType && contentType.includes('application/json')) {
                 const data = await response.json();
