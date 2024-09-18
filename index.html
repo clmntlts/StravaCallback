@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strava Callback</title>
+    <script>
+        // Extract the code from the URL
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                // Send code to your backend server
+                fetch("https://your-backend-server-url/process-code", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ code: code })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        console.log("Code sent to backend successfully!");
+                    } else {
+                        console.error("Failed to send code:", response.statusText);
+                    }
+                })
+                .catch(error => {
+                    console.error("Error sending code:", error);
+                });
+            } else {
+                console.error("No code found in the URL.");
+            }
+        };
+    </script>
+</head>
+<body>
+    <h1>Strava OAuth Callback</h1>
+    <p>If you're seeing this, the callback page has been loaded.</p>
+</body>
+</html>
