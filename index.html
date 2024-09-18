@@ -3,38 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Callback</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
-        #code {
-            display: block;
-            margin: 20px auto;
-            padding: 10px;
-            font-size: 18px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            max-width: 400px;
-        }
-        #copy-button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            background-color: #007bff;
-            color: white;
-            border-radius: 5px;
-        }
-    </style>
+    <title>Strava OAuth Callback</title>
 </head>
 <body>
-    <h1>Strava OAuth Callback</h1>
-    <p>Authorization Code:</p>
-    <input type="text" id="code" readonly>
-    <button id="copy-button">Copy Code</button>
+    <h1>Authentication Successful</h1>
+    <p>Your Strava authentication was successful. You can close this window.</p>
 
     <script>
         window.onload = function() {
@@ -42,8 +15,6 @@
             const code = urlParams.get('code');
 
             if (code) {
-                document.getElementById('code').value = code;
-
                 // Send the code to the Vercel API route
                 fetch('/api/sendCode', {
                     method: 'POST',
@@ -56,15 +27,8 @@
                 .then(data => console.log('Success:', data))
                 .catch(error => console.error('Error:', error));
             } else {
-                document.getElementById('code').value = 'No code found in the URL.';
+                console.error('No authorization code found in the URL.');
             }
-        };
-
-        document.getElementById('copy-button').onclick = function() {
-            const codeInput = document.getElementById('code');
-            codeInput.select();
-            document.execCommand('copy');
-            alert('Code copied to clipboard!');
         };
     </script>
 </body>
