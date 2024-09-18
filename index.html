@@ -11,18 +11,19 @@
 
     <script>
         window.onload = function() {
-            // Extract the code parameter from the URL
+            // Extract the conversationId and code from the URL
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
+            const conversationId = urlParams.get('conversationId');
 
-            if (code) {
-                // Send the code to the Vercel API route
+            if (code && conversationId) {
+                // Send the conversationId and code to the Vercel API route
                 fetch('/api/sendCode', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ code })
+                    body: JSON.stringify({ code, conversationId })
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -34,8 +35,8 @@
                     // Optionally display an error message
                 });
             } else {
-                console.error('No authorization code found in the URL.');
-                // Optionally display a message for missing code
+                console.error('No authorization code or conversationId found in the URL.');
+                // Optionally display a message for missing code or conversationId
             }
         };
     </script>
