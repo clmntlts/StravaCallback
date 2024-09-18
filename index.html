@@ -11,6 +11,7 @@
 
     <script>
         window.onload = function() {
+            // Extract the code parameter from the URL
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
 
@@ -24,10 +25,17 @@
                     body: JSON.stringify({ code })
                 })
                 .then(response => response.json())
-                .then(data => console.log('Success:', data))
-                .catch(error => console.error('Error:', error));
+                .then(data => {
+                    console.log('Success:', data);
+                    // Optionally display a success message or handle the response
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Optionally display an error message
+                });
             } else {
                 console.error('No authorization code found in the URL.');
+                // Optionally display a message for missing code
             }
         };
     </script>
