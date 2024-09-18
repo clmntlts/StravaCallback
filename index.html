@@ -4,39 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Callback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #code {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            font-size: 18px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-width: 400px;
+        }
+        #copy-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Strava OAuth Callback</h1>
+    <p>Authorization Code:</p>
+    <input type="text" id="code" readonly>
+    <button id="copy-button">Copy Code</button>
+
     <script>
-        // Extract the code from the URL
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
 
             if (code) {
-                // Send code to your backend server
-                fetch("https://your-backend-server-url/process-code", {
-                    method: "POST",
+                document.getElementById('code').value = code;
+
+                // Send the code to the Vercel API route
+                fetch('/api/sendCode', {
+                    method: 'POST',
                     headers: {
-                        "Content-Type": "application/json"
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ code: code })
+                    body: JSON.stringify({ code })
                 })
-                .then(response => {
-                    if (response.ok) {
-                        console.log("Code sent to backend successfully!");
-                    } else {
-                        console.error("Failed to send code:", response.statusText);
-                    }
-                })
-                .catch(error => {
-                    console.error("Error sending code:", error);
-                });
+                .then(response => response.json())
+                .then(data => console.log('Success:', data))
+                .catch(error => console.error('Error:', error));
             } else {
-                console.error("No code found in the URL.");
+                document.getElementById('code').value = 'No code found in the URL.';
             }
         };
+
+        document.getElementById('copy-button').onclick = function() {
+            const codeInput = document.getElementById('code');
+            codeInput.select();
+            document.execCommand('copy');
+            alert('Code copied to clipboard!');
+        };
     </script>
-</head>
-<body>
-    <h1>Strava OAuth Callback</h1>
-    <p>If you're seeing this, the callback page has been loaded.</p>
 </body>
 </html>
