@@ -1,65 +1,113 @@
-# Préparation Backyard Ultra 🏃‍♂️🌲
+# Entraînement Backyard Ultra — moteur adaptatif 🏃‍♂️🌲
 
-Coaching + séances structurées pour ta backyard ultra d'avril
-(objectif **18-24 yards**), livrées au format **`.FIT`** importable sur Garmin.
+Un moteur qui **génère chaque semaine** tes séances au format **`.FIT` Garmin**,
+en s'**adaptant à ce que tu as réellement fait la semaine précédente** (Strava),
+tout en **respectant la structure macro** d'un programme périodisé de 34 semaines
+(objectif backyard ultra, **18-24 yards**, 4 jours/semaine).
 
-## Contenu
+## Idée directrice
 
-| Fichier | Rôle |
-|---|---|
-| `plan.md` | Le plan sur **34 semaines** (calendrier semaine par semaine). |
-| `workouts/*.fit` | **25 séances structurées** prêtes à importer dans Garmin Connect. |
-| `build_workouts.py` | Génère les `.FIT` à partir de **tes allures** (à éditer). |
-| `build_plan.py` | Génère `plan.md`. |
-| `fit_encoder.py` | Encodeur FIT maison (aucune dépendance). |
+- `engine/program.py` = **la ligne de conduite** : 34 semaines, chacune décrit
+  une *intention* par rôle (`quality` / `easy` / `long` / `b2b`) sous forme de
+  séances **paramétrables** (durée, reps, boucles…). C'est la structure fixe.
+- `engine/adapt.py` = **le moteur adaptatif** : il prend la semaine prévue + le
+  réalisé Strava de la semaine passée, et **module les paramètres** — sans jamais
+  changer le *type* ni le *rôle* d'une séance. La structure tient, la charge s'ajuste.
 
-## Importer les séances sur ta Garmin
+## Utilisation
 
-1. Va sur **Garmin Connect** (web : connect.garmin.com).
-2. **Entraînement & planification → Entraînements → Importer**.
-3. Sélectionne un fichier `workouts/XX_....fit`. Répète pour chaque séance
-   (à ne faire **qu'une fois** : ce sont des modèles réutilisables).
-4. Depuis l'appli/le web, **envoie la séance vers la montre** ou
-   **planifie-la sur une date** du calendrier — elle se synchronise à la
-   prochaine synchro de la montre.
-5. Sur la montre : *Entraînement → Séances* → tu suis les étapes, la montre
-   te guide (durée, allure cible, bips de transition).
+```bash
+cd training
 
-> Astuce : plutôt que d'importer les 25 d'un coup, importe au fil des semaines
-> celles dont tu as besoin. Le `plan.md` te dit exactement laquelle faire quand.
+# Semaine adaptée à partir d'un export d'activités (JSON, fixture ou export perso)
+python3 generate.py week 9 --activities tests/fixtures/last_week_sample.json --today 2026-09-14
 
-## ⚙️ Personnaliser tes allures (important)
+# Semaine adaptée en direct depuis Strava (voir variables d'env plus bas)
+python3 generate.py week 9 --live
 
-Les allures par défaut sont calées pour un coureur à ~30-50 km/sem. Pour les
-adapter aux tiennes :
+# Bibliothèque complète des séances "nominales" (import une fois dans Garmin)
+python3 generate.py library
 
-1. Ouvre `build_workouts.py`, édite le dictionnaire **`PACES`** (min/km).
-2. Relance :
-   ```bash
-   python3 build_workouts.py
-   ```
-3. Réimporte les `.FIT` modifiés dans Garmin Connect.
+# Régénérer le plan (plan.md + plan.html) depuis le programme
+python3 generate.py plan
+```
 
-### Recalibrage automatique via Strava
+`generate.py week N` écrit dans `workouts/semaine_NN/` :
+- un `.fit` par séance (à importer dans Garmin Connect),
+- `rapport.md` : lecture du coach + ajustements justifiés + bilan Strava,
+- `rapport.json` : les mêmes données, exploitables par un bot / une automatisation.
 
-Le connecteur **Strava** est installé mais **désactivé dans ce chat**. Active-le
-dans les réglages de connecteurs de la conversation : je lirai alors ton
-historique (volume, allures endurance/seuil, D+, régularité) et je re-calerai
-`PACES` + le plan sur tes vraies données.
+## Règles d'adaptation
 
-## Rappels backyard (le format qui change tout)
+Mesure de référence : **adhérence** = temps réalisé / temps prévu (semaine N-1).
 
-- **Boucle de 6,7 km à relancer chaque heure, à l'heure pile.** Ce qui te sort
-  n'est jamais la vitesse : c'est la **gestion** (allure basse, nutrition,
-  pieds, sommeil, mental). Le plan est construit là-dessus.
-- **Vise ~48-52 min par boucle** en début de course : tu cours "trop
-  facile", tu ranges du temps pour manger/pisser/te changer. Les séances
-  *Simu Backyard* t'entraînent exactement à ce rythme boucle + repos.
-- **Mange et bois à CHAQUE boucle**, dès le début. Les séances *Marche-course*
-  et *Simu Backyard* servent à roder ton estomac et ton ravito.
-- **Entraîne la nuit et les jambes fatiguées** : c'est le rôle des sorties de
-  nuit et des week-ends *back-to-back* (B2B).
-- **Le repos fait partie du plan** : les semaines 🟢 de décharge, tu lèves le
-  pied pour vraiment progresser. Ne les saute pas.
+| Situation | Bande | Effet |
+|---|---|---|
+| Décharge programmée | `deload` | **Intouchable** (c'est déjà de la récup). |
+| Adhérence < 60 % | `reprise` | Régression (× 0,75) + sortie longue plafonnée. |
+| 60-85 % | `consolide` | On tempère (× 0,90) + sortie longue plafonnée. |
+| 85-115 % | `nominal` | On suit le programme tel quel. |
+| > 115 % | `vigilance` | Pas de sur-dose ; surveillance ACWR. |
 
-*Séances générées et validées (CRC + parsing FIT). Ajuste, relance, cours.*
+Garde-fous supplémentaires :
+- **Sortie longue** : jamais plus de **+15 %** au-delà de la plus longue sortie
+  réellement bouclée la semaine passée (anti-saut de charge / anti-blessure).
+- **ACWR** (charge aiguë 7 j / chronique 28 j) : > 1,5 → frein de sécurité
+  (× 0,8) **et** qualité rétrogradée en facile ; > 1,3 → prudence (× 0,9).
+- **Structure préservée** : les 4 rôles et les types de séance ne changent pas
+  (seule exception documentée : le downgrade qualité→facile si fatigue élevée).
+
+## Connexion Strava
+
+Auth par variables d'environnement (jamais commitées) :
+
+```bash
+export STRAVA_CLIENT_ID=...
+export STRAVA_CLIENT_SECRET=...
+export STRAVA_REFRESH_TOKEN=...
+```
+
+Le client (`engine/strava.py`, stdlib pure) rafraîchit le token, liste les
+activités des ~5 dernières semaines, isole la semaine calendaire précédente
+et calcule volume / D+ / plus longue sortie / ACWR.
+
+## Personnaliser les allures
+
+`engine/workouts.py` → dictionnaire `PACES` (min/km). Les cibles d'allure des
+`.FIT` en découlent. Recalibrable avec tes vraies données Strava.
+
+## Structure
+
+```
+training/
+  generate.py         # CLI (week / library / plan)
+  engine/
+    models.py         # types (SessionSpec, PlannedWeek, WeekSummary, Adjustment)
+    program.py        # programme 34 semaines (source unique)
+    workouts.py       # templates de séances paramétrables + allures
+    adapt.py          # moteur adaptatif
+    strava.py         # client Strava + synthèse hebdo
+    report.py         # rapports md/json + (re)génération du plan
+    fit_encoder.py    # encodeur FIT sans dépendance
+  tests/              # tests unitaires (python3 -m unittest discover -s tests)
+  workouts/           # séances .fit générées
+  plan.md / plan.html # plan macro (vue d'ensemble)
+```
+
+## Tests
+
+```bash
+cd training && python3 -m unittest discover -s tests -v
+```
+
+Les tests couvrent : bandes d'adaptation, garde-fous (décharge, ACWR, plafond
+long), préservation de la structure, et validité des `.FIT` (parsés par la lib
+de référence `fitdecode` si installée, sinon le test se skippe).
+
+## Import Garmin
+
+Garmin Connect (web) → Entraînement → Entraînements → **Importer** les `.fit`,
+puis planifie-les sur les bons jours (ou envoie-les vers la montre).
+
+---
+*Plan indicatif, pas un avis médical. Adapte selon fatigue et blessures.*

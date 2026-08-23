@@ -2,70 +2,67 @@
 
 Objectif : **18-24 yards** · 4 jours/semaine · Mar. (qualité) · Jeu. (facile) · Sam. (longue) · Dim. (B2B).
 
-> Chaque séance renvoie à un fichier `.FIT` de `training/workouts/` à importer dans Garmin Connect. Les jours non listés = repos ou renfo/mobilité.
+> Programme macro (la « ligne de conduite »). Chaque semaine est ensuite **ajustée** au réalisé de la semaine précédente via `engine/adapt.py`.
 
 
 ## Phase — Fondation
 
-| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total | Note |
-|---:|---|---|---|---|---:|---|
-| 1 | Facile 60' | Facile + lignes droites | Longue 1h30 | B2B J2 - 1h00 | 4.3 h | On installe la régularité, allure basse |
-| 2 | Facile 60' | Facile + lignes droites | Longue 2h00 | B2B J2 - 1h00 | 4.8 h | Le volume monte doucement |
-| 3 | Côtes 8×60" | Facile 60' | Longue 2h00 | B2B J2 - 1h30 | 5.2 h | Intro force en côtes |
-| 4 🟢 | Facile 45' | Récup 40' | Longue 1h30 | B2B J2 - 1h00 | 3.9 h | Décharge — on assimile |
-| 5 | Seuil 2×15' | Facile 60' | Longue 2h30 | B2B J2 - 1h30 | 5.9 h | Intro seuil |
-| 6 | Côtes 10×90" | Facile 75' | Longue 2h30 | B2B J2 - 1h30 | 6.2 h | Force + endurance |
-| 7 | Seuil 3×10' | Facile 60' | Longue 3h00 | B2B J2 - 2h00 | 7.0 h | Premier gros week-end |
-| 8 🟢 | Facile + lignes droites | Récup 40' | Longue 2h00 | B2B J2 - 1h00 | 4.5 h | Décharge |
+| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total |
+|---:|---|---|---|---|---:|
+| 1 | Facile 60' | Facile 35' + lignes droites | Longue 1h30 | B2B 1h00 | 4.3 h |
+| 2 | Facile 60' | Facile 35' + lignes droites | Longue 2h00 | B2B 1h00 | 4.8 h |
+| 3 | Côtes 8×60" | Facile 60' | Longue 2h00 | B2B 1h30 | 5.2 h |
+| 4 🟢 | Facile 45' | Récup 40' | Longue 1h30 | B2B 1h00 | 3.9 h |
+| 5 | Seuil 2×15' | Facile 60' | Longue 2h30 | B2B 1h30 | 6.0 h |
+| 6 | Côtes 10×90" | Facile 75' | Longue 2h30 | B2B 1h30 | 6.3 h |
+| 7 | Seuil 3×10' | Facile 60' | Longue 3h00 | B2B 2h00 | 7.0 h |
+| 8 🟢 | Facile 35' + lignes droites | Récup 40' | Longue 2h00 | B2B 1h00 | 4.5 h |
 
 ## Phase — Force-endurance
 
-| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total | Note |
-|---:|---|---|---|---|---:|---|
-| 9 | Résistance fatigue 4×20' | Facile 60' | Longue 3h00 | B2B J2 - 2h00 | 7.8 h | Résistance à la fatigue |
-| 10 | Côtes 10×90" | Facile 75' | Marche-course 3h | B2B J2 - 1h30 | 6.7 h | Marche-course : gestion ravito |
-| 11 | Seuil 3×10' | Facile 75' | Longue 3h00 | B2B J2 - 2h00 | 7.3 h | Charge soutenue |
-| 12 🟢 | Facile + lignes droites | Récup 40' | Longue 2h00 | B2B J2 - 1h00 | 4.5 h | Décharge |
-| 13 | Résistance fatigue 4×20' | Facile 60' | Marche-course 4h | B2B J2 - 2h00 | 8.8 h | Premier 4h en temps de pied |
-| 14 | Côtes 10×90" | Facile 75' | Longue 3h00 | B2B J2 - 2h00 | 7.2 h | Volume soutenu |
-| 15 | Seuil 3×10' | Facile 75' | Marche-course 4h | B2B J2 - 2h00 | 8.3 h | Deuxième 4h |
-| 16 🟢 | Facile 60' | Récup 40' | Longue 2h30 | B2B J2 - 1h00 | 5.2 h | Décharge |
+| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total |
+|---:|---|---|---|---|---:|
+| 9 | Résistance 4×20' | Facile 60' | Longue 3h00 | B2B 2h00 | 8.0 h |
+| 10 | Côtes 10×90" | Facile 75' | Marche-course 3h00 | B2B 1h30 | 6.8 h |
+| 11 | Seuil 3×10' | Facile 75' | Longue 3h00 | B2B 2h00 | 7.3 h |
+| 12 🟢 | Facile 35' + lignes droites | Récup 40' | Longue 2h00 | B2B 1h00 | 4.5 h |
+| 13 | Résistance 4×20' | Facile 60' | Marche-course 4h00 | B2B 2h00 | 8.9 h |
+| 14 | Côtes 10×90" | Facile 75' | Longue 3h00 | B2B 2h00 | 7.3 h |
+| 15 | Seuil 3×10' | Facile 75' | Marche-course 4h00 | B2B 2h00 | 8.3 h |
+| 16 🟢 | Facile 60' | Récup 40' | Longue 2h30 | B2B 1h00 | 5.2 h |
 
 ## Phase — Spécifique
 
-| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total | Note |
-|---:|---|---|---|---|---:|---|
-| 17 | Résistance fatigue 4×20' | Facile 60' | Simu Backyard 6 boucles | B2B J2 - 1h30 | 10.3 h | 1re simu backyard (6 boucles) |
-| 18 | Côtes 10×90" | Facile 75' | Longue 4h00 | B2B J2 - 2h00 | 8.2 h | Plus longue sortie continue : 4h |
-| 19 | Seuil 3×10' | Facile 75' | Marche-course 4h | B2B J2 - 2h00 | 8.3 h | Temps de pied + ravito |
-| 20 🟢 | Facile + lignes droites | Récup 40' | Longue 2h30 | B2B J2 - 1h00 | 5.0 h | Décharge |
-| 21 | Résistance fatigue 4×20' | Facile 60' | Simu Backyard 6 boucles | B2B J2 - 2h00 | 10.8 h | 2e simu backyard |
-| 22 | Côtes 10×90" | Facile 75' | Longue 5h00 | B2B J2 - 2h00 | 9.2 h | Le gros morceau : 5h |
-| 23 | Seuil 3×10' | Sortie nuit 2h | Marche-course 4h | B2B J2 - 2h00 | 9.0 h | Course de nuit (jeu.) + long |
-| 24 🟢 | Facile 60' | Récup 40' | Longue 2h30 | B2B J2 - 1h00 | 5.2 h | Décharge |
-| 25 | Résistance fatigue 4×20' | Facile 60' | Simu Backyard 10 boucles | B2B J2 - 1h00 | 13.8 h | Répétition majeure : 10 boucles / nuit |
-| 26 | Côtes 10×90" | Facile 75' | Longue 4h00 | B2B J2 - 2h00 | 8.2 h | Consolidation |
+| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total |
+|---:|---|---|---|---|---:|
+| 17 | Résistance 4×20' | Facile 60' | Simu Backyard 6 boucles | B2B 1h30 | 10.4 h |
+| 18 | Côtes 10×90" | Facile 75' | Longue 4h00 | B2B 2h00 | 8.3 h |
+| 19 | Seuil 3×10' | Facile 75' | Marche-course 4h00 | B2B 2h00 | 8.3 h |
+| 20 🟢 | Facile 35' + lignes droites | Récup 40' | Longue 2h30 | B2B 1h00 | 5.0 h |
+| 21 | Résistance 4×20' | Facile 60' | Simu Backyard 6 boucles | B2B 2h00 | 10.9 h |
+| 22 | Côtes 10×90" | Facile 75' | Longue 5h00 | B2B 2h00 | 9.3 h |
+| 23 | Seuil 3×10' | Nuit 2h00 | Marche-course 4h00 | B2B 2h00 | 9.0 h |
+| 24 🟢 | Facile 60' | Récup 40' | Longue 2h30 | B2B 1h00 | 5.2 h |
+| 25 | Résistance 4×20' | Facile 60' | Simu Backyard 10 boucles | B2B 1h00 | 13.9 h |
+| 26 | Côtes 10×90" | Facile 75' | Longue 4h00 | B2B 2h00 | 8.3 h |
 
 ## Phase — Pic
 
-| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total | Note |
-|---:|---|---|---|---|---:|---|
-| 27 | Résistance fatigue 4×20' | Facile 75' | Longue 4h00 | B2B J2 - 2h00 | 9.1 h | Gros volume |
-| 28 🟢 | Seuil 2×15' | Facile 60' | Longue 3h00 | B2B J2 - 1h30 | 6.4 h | Mini-décharge avant le pic |
-| 29 | Côtes 10×90" | Facile 75' | Simu Backyard 6 boucles | B2B J2 - 2h00 | 10.2 h | Spécifique boucles |
-| 30 | Résistance fatigue 4×20' | Facile 75' | Longue 5h00 | B2B J2 - 2h00 | 10.1 h | Plus gros continu : 5h |
-| 31 | Facile + lignes droites | Facile 45' | Simu Backyard 10 boucles | B2B J2 - 1h00 | 12.6 h | RÉPÉTITION GÉNÉRALE (10 boucles, nuit, nutrition) |
+| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total |
+|---:|---|---|---|---|---:|
+| 27 | Résistance 4×20' | Facile 75' | Longue 4h00 | B2B 2h00 | 9.2 h |
+| 28 🟢 | Seuil 2×15' | Facile 60' | Longue 3h00 | B2B 1h30 | 6.5 h |
+| 29 | Côtes 10×90" | Facile 75' | Simu Backyard 6 boucles | B2B 2h00 | 10.3 h |
+| 30 | Résistance 4×20' | Facile 75' | Longue 5h00 | B2B 2h00 | 10.2 h |
+| 31 | Facile 35' + lignes droites | Facile 45' | Simu Backyard 10 boucles | B2B 1h00 | 12.6 h |
 
 ## Phase — Affûtage
 
-| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total | Note |
-|---:|---|---|---|---|---:|---|
-| 32 | Seuil 2×15' | Facile 45' | Longue 2h30 | B2B J2 - 1h00 | 5.2 h | On réduit le volume, on garde la fraîcheur |
-| 33 | Facile + lignes droites | Récup 40' | Longue 1h30 | B2B J2 - 1h00 | 4.0 h | Affûtage |
-| 34 | Récup 40' | Facile + lignes droites | Repos | Repos | 1.5 h | SEMAINE DE COURSE |
+| Sem. | Mardi | Jeudi | Samedi | Dimanche | Total |
+|---:|---|---|---|---|---:|
+| 32 | Seuil 2×15' | Facile 45' | Longue 2h30 | B2B 1h00 | 5.3 h |
+| 33 | Facile 35' + lignes droites | Récup 40' | Longue 1h30 | B2B 1h00 | 4.0 h |
+| 34 | Récup 35' | Facile 20' + lignes droites | Repos | Repos | 1.1 h |
 
-🟢 = semaine de décharge (récupération, ~-35 % de volume).
-
-
-**Pic de charge** : semaine 25 (~13.8 h). La montée en charge est progressive avec décharge toutes les 3-4 semaines pour absorber le travail sans se blesser.
+🟢 = semaine de décharge.
 

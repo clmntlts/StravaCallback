@@ -1,0 +1,17 @@
+[
+  {"name": "Sortie longue dimanche", "sport_type": "Run", "distance": 18000, "moving_time": 5400, "total_elevation_gain": 320, "start_date_local": "2026-09-13T08:30:00Z", "average_heartrate": 142},
+  {"name": "Footing seuil", "sport_type": "Run", "distance": 8000, "moving_time": 2700, "total_elevation_gain": 90, "start_date_local": "2026-09-11T18:00:00Z", "average_heartrate": 156},
+  {"name": "Endurance", "sport_type": "Run", "distance": 10000, "moving_time": 3600, "total_elevation_gain": 110, "start_date_local": "2026-09-08T07:15:00Z", "average_heartrate": 138},
+
+  {"name": "Long weekend", "sport_type": "Run", "distance": 20000, "moving_time": 6300, "total_elevation_gain": 350, "start_date_local": "2026-09-06T08:00:00Z", "average_heartrate": 141},
+  {"name": "Facile", "sport_type": "Run", "distance": 9000, "moving_time": 3200, "total_elevation_gain": 80, "start_date_local": "2026-09-03T18:30:00Z"},
+  {"name": "Côtes", "sport_type": "Run", "distance": 8500, "moving_time": 2900, "total_elevation_gain": 240, "start_date_local": "2026-09-01T18:00:00Z"},
+
+  {"name": "Sortie longue", "sport_type": "TrailRun", "distance": 17000, "moving_time": 5200, "total_elevation_gain": 400, "start_date_local": "2026-08-30T08:00:00Z"},
+  {"name": "Endurance", "sport_type": "Run", "distance": 10000, "moving_time": 3500, "total_elevation_gain": 100, "start_date_local": "2026-08-27T18:00:00Z"},
+  {"name": "Facile", "sport_type": "Run", "distance": 8000, "moving_time": 2800, "total_elevation_gain": 60, "start_date_local": "2026-08-25T18:00:00Z"},
+
+  {"name": "Vélo (ne compte pas)", "sport_type": "Ride", "distance": 40000, "moving_time": 5400, "total_elevation_gain": 500, "start_date_local": "2026-08-23T09:00:00Z"},
+  {"name": "Sortie longue", "sport_type": "Run", "distance": 16000, "moving_time": 5000, "total_elevation_gain": 300, "start_date_local": "2026-08-22T08:00:00Z"},
+  {"name": "Endurance", "sport_type": "Run", "distance": 9000, "moving_time": 3200, "total_elevation_gain": 90, "start_date_local": "2026-08-19T18:00:00Z"}
+]

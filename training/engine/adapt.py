@@ -1,0 +1,215 @@
+"""LE moteur adaptatif.
+
+Entrée  : la semaine PRÉVUE (program.py) + la synthèse du RÉALISÉ de la semaine
+          précédente (strava.py).
+Sortie  : la semaine AJUSTÉE + la liste des ajustements justifiés.
+
+Règles (résumé) — voir README pour le détail :
+  1. Une semaine de DÉCHARGE reste intouchable (c'est déjà de la récup).
+  2. On mesure l'ADHÉRENCE = temps réalisé / temps prévu (semaine N-1) :
+        < 0.60  → REPRISE   : on régresse (scale 0.75), long plafonné.
+        < 0.85  → CONSOLIDE : on tempère  (scale 0.90), long plafonné.
+        ≤ 1.15  → NOMINAL   : on suit le programme tel quel.
+        > 1.15  → VIGILANCE  : pas de sur-dose ; on surveille l'ACWR.
+  3. Garde-fou ACWR (charge aiguë/chronique) si dispo :
+        > 1.5 → frein de sécurité (scale ≤ 0.8) + qualité rétrogradée en facile.
+        > 1.3 → prudence (scale ≤ 0.9).
+  4. La SORTIE LONGUE ne bondit jamais de +15 % au-delà de la plus longue
+     réellement bouclée la semaine passée (anti-saut de charge).
+  5. On ne change JAMAIS le type/rôle d'une séance (structure préservée) ;
+     seule exception documentée : rétrograder une qualité en facile si fatigue.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+from .models import Adjustment, PlannedWeek, SessionSpec, WeekSummary
+from . import workouts
+
+# Bornes des bandes d'adhérence
+BAND_REPRISE = 0.60
+BAND_CONSOLIDE = 0.85
+BAND_NOMINAL_HAUT = 1.15
+
+# Plafonds de progression de la sortie longue
+LONG_GROWTH = 1.15         # +15 % max vs plus long réalisé (bandes reprise/consolide)
+
+# Seuils ACWR
+ACWR_BRAKE = 1.5
+ACWR_CAUTION = 1.3
+ACWR_LOW = 0.8
+
+# Planchers de bon sens
+FLOOR_MIN = 20             # minutes minimum d'une séance en durée
+FLOOR_LONG_MIN = 40
+FLOOR_LOOPS = 3
+FLOOR_HOURS = 1.0
+
+# Quel paramètre chaque template met à l'échelle
+_SCALE_PARAM = {
+    "easy": "minutes", "recovery": "minutes", "strides": "minutes",
+    "long": "minutes", "b2b": "minutes", "night": "minutes",
+    "threshold": "reps", "hills": "reps", "cruise": "reps", "resist": "reps",
+    "backyard": "loops", "runwalk": "hours",
+}
+_LONG_TEMPLATES = {"long", "runwalk", "backyard", "night"}
+
+
+@dataclass
+class AdaptResult:
+    week: PlannedWeek
+    adjustments: List[Adjustment]
+    band: str
+    scale: float
+    acwr: Optional[float]
+    message: str
+
+
+# --------------------------------------------------------------------------- #
+# Helpers d'échelle
+# --------------------------------------------------------------------------- #
+def _round5(x: float) -> int:
+    return int(5 * round(x / 5))
+
+
+def _round_half(x: float) -> float:
+    return round(x * 2) / 2
+
+
+def _scaled_spec(spec: SessionSpec, scale: float) -> SessionSpec:
+    """Applique un facteur d'échelle au bon paramètre, avec arrondi & plancher."""
+    kind = _SCALE_PARAM.get(spec.template)
+    if kind is None or scale == 1.0:
+        return spec.copy()
+    is_long = spec.template in _LONG_TEMPLATES
+    if kind == "minutes":
+        m = _round5(spec.params["minutes"] * scale)
+        m = max(FLOOR_LONG_MIN if is_long else FLOOR_MIN, m)
+        return spec.copy(minutes=m)
+    if kind == "reps":
+        r = max(1, round(spec.params["reps"] * scale))
+        return spec.copy(reps=r)
+    if kind == "loops":
+        n = max(FLOOR_LOOPS, round(spec.params["loops"] * scale))
+        return spec.copy(loops=n)
+    if kind == "hours":
+        h = max(FLOOR_HOURS, _round_half(spec.params["hours"] * scale))
+        return spec.copy(hours=h)
+    return spec.copy()
+
+
+def _set_duration(spec: SessionSpec, target_min: float) -> SessionSpec:
+    """Ramène la durée totale d'une séance ~à `target_min` (plafond)."""
+    kind = _SCALE_PARAM.get(spec.template)
+    if kind == "minutes":
+        return spec.copy(minutes=max(FLOOR_LONG_MIN, _round5(target_min)))
+    if kind == "loops":
+        run = spec.params.get("run_min", 50) + spec.params.get("rest_min", 10)
+        return spec.copy(loops=max(FLOOR_LOOPS, round(target_min / run)))
+    if kind == "hours":
+        return spec.copy(hours=max(FLOOR_HOURS, _round_half(target_min / 60)))
+    return spec.copy()
+
+
+# --------------------------------------------------------------------------- #
+# Choix de la bande + facteur global
+# --------------------------------------------------------------------------- #
+def _band_and_scale(adherence: float) -> Tuple[str, float]:
+    if adherence < BAND_REPRISE:
+        return "reprise", 0.75
+    if adherence < BAND_CONSOLIDE:
+        return "consolide", 0.90
+    if adherence <= BAND_NOMINAL_HAUT:
+        return "nominal", 1.0
+    return "vigilance", 1.0
+
+
+# --------------------------------------------------------------------------- #
+# Cœur
+# --------------------------------------------------------------------------- #
+def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
+    adjustments: List[Adjustment] = []
+    out = planned.copy()
+
+    # 1) Décharge : intouchable
+    if planned.deload:
+        return AdaptResult(
+            week=out, adjustments=[], band="deload", scale=1.0,
+            acwr=last.acwr,
+            message="Semaine de décharge : conservée telle quelle (récupération programmée).",
+        )
+
+    adherence = last.adherence
+    band, scale = _band_and_scale(adherence)
+    acwr = last.acwr
+
+    # 3) Garde-fou ACWR : peut durcir le frein
+    brake_quality = False
+    if acwr is not None:
+        if acwr > ACWR_BRAKE:
+            scale = min(scale, 0.8)
+            brake_quality = True
+        elif acwr > ACWR_CAUTION:
+            scale = min(scale, 0.9)
+        elif acwr < ACWR_LOW and band in ("nominal", "vigilance"):
+            scale = max(scale, 1.0)  # sous-chargé chroniquement : on ne bride pas
+
+    # 2/5) Application du facteur global à chaque séance (structure préservée)
+    if scale != 1.0:
+        for role, spec in list(out.sessions.items()):
+            new = _scaled_spec(spec, scale)
+            if workouts.label(new) != workouts.label(spec):
+                adjustments.append(Adjustment(
+                    role=role, before=workouts.label(spec), after=workouts.label(new),
+                    reason=f"volume × {scale:.2f} (adhérence {adherence:.0%})",
+                ))
+            out.sessions[role] = new
+
+    # 4) Plafond de la sortie longue (anti-saut) — bandes reprise/consolide
+    if "long" in out.sessions and band in ("reprise", "consolide") and last.longest_run_s > 0:
+        long_spec = out.sessions["long"]
+        cap_min = (last.longest_run_s / 60.0) * LONG_GROWTH
+        if workouts.minutes(long_spec) > cap_min:
+            capped = _set_duration(long_spec, cap_min)
+            adjustments.append(Adjustment(
+                role="long", before=workouts.label(long_spec), after=workouts.label(capped),
+                reason=(f"plafonnée : +15 % max vs plus long réalisé "
+                        f"({last.longest_run_s/60:.0f}' → cap {cap_min:.0f}')"),
+            ))
+            out.sessions["long"] = capped
+
+    # 3bis) Rétrograder la qualité en facile si fatigue marquée (ACWR élevé)
+    if brake_quality and "quality" in out.sessions:
+        q = out.sessions["quality"]
+        if q.template not in ("easy", "recovery", "strides"):
+            easy_spec = SessionSpec("easy", {"minutes": 50})
+            adjustments.append(Adjustment(
+                role="quality", before=workouts.label(q), after=workouts.label(easy_spec),
+                reason=f"fatigue élevée (ACWR {acwr:.2f}) : qualité rétrogradée en facile",
+            ))
+            out.sessions["quality"] = easy_spec
+
+    message = _message(band, adherence, acwr, last, adjustments)
+    return AdaptResult(out, adjustments, band, scale, acwr, message)
+
+
+def _message(band, adherence, acwr, last: WeekSummary, adjustments) -> str:
+    head = {
+        "reprise": "REPRISE — semaine passée bien en deçà du prévu, on régresse pour repartir sainement.",
+        "consolide": "CONSOLIDATION — semaine passée partiellement réalisée, on tempère.",
+        "nominal": "NOMINAL — semaine passée conforme, on suit le programme.",
+        "vigilance": "VIGILANCE — semaine passée au-dessus du prévu, pas de sur-dose.",
+    }[band]
+    bits = [head]
+    if last.planned_time_s > 0:
+        bits.append(f"Réalisé {last.actual_hours:.1f} h / {last.planned_hours:.1f} h prévues "
+                    f"({adherence:.0%}), {last.n_runs} sorties.")
+    if acwr is not None:
+        bits.append(f"ACWR {acwr:.2f}.")
+    if not adjustments:
+        bits.append("Aucun ajustement : la semaine est appliquée telle quelle.")
+    else:
+        bits.append(f"{len(adjustments)} ajustement(s).")
+    return " ".join(bits)
