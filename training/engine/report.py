@@ -8,12 +8,12 @@ import re
 from typing import List
 
 from .adapt import AdaptResult
-from .models import ROLE_DAY, ROLES, PlannedWeek, WeekSummary
+from .models import ROLE_DAY, ROLES, PlannedWeek, WeekSummary, ordered_roles
 from . import program, workouts
 
 
 def _ordered_roles(week: PlannedWeek):
-    return [r for r in ROLES if r in week.sessions]
+    return ordered_roles(week.sessions)
 
 
 # --------------------------------------------------------------------------- #

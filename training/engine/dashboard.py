@@ -13,8 +13,8 @@ import html
 from datetime import date
 from typing import List, Optional
 
-from .adapt import AdaptResult
-from .models import ROLE_DAY, ROLES, WeekSummary
+from .adapt import ACWR_BRAKE, ACWR_CAUTION, ACWR_LOW, AdaptResult
+from .models import ROLE_DAY, WeekSummary, ordered_roles
 from . import program, workouts
 
 
@@ -25,6 +25,8 @@ def _esc(s) -> str:
 def _load_curve_svg(planned: List[float], actual: List[Optional[float]],
                     current: int) -> str:
     n = len(planned)
+    # aligne défensivement les deux séries sur la longueur de `planned`
+    actual = (list(actual) + [None] * n)[:n]
     W, H = 720, 200
     pad_b, pad_t = 24, 12
     bw = W / n
@@ -58,7 +60,7 @@ def _load_curve_svg(planned: List[float], actual: List[Optional[float]],
         f'<text x="2" y="{y(v)-2:.1f}" class="yl">{v}h</text>'
         for v in range(0, int(top) + 1, 4) if v > 0)
     return (f'<svg viewBox="0 0 {W} {H}" class="chart" '
-            f'preserveAspectRatio="none" role="img" '
+            f'preserveAspectRatio="xMidYMid meet" role="img" '
             f'aria-label="Charge prévue vs réalisée par semaine">'
             f'{grid}{"".join(bars)}</svg>')
 
@@ -74,7 +76,7 @@ def build(res: AdaptResult, last: WeekSummary,
 
     # séances de la semaine
     rows = ""
-    for role in [r for r in ROLES if r in w.sessions]:
+    for role in ordered_roles(w.sessions):
         spec = w.sessions[role]
         rows += (f'<tr><td class="d">{_esc(ROLE_DAY[role])}</td>'
                  f'<td>{_esc(workouts.label(spec))}</td>'
@@ -139,9 +141,9 @@ def _adh_cls(a):
 def _acwr_cls(a):
     if a is None:
         return ""
-    if a > 1.5 or a < 0.7:
+    if a > ACWR_BRAKE or a < ACWR_LOW:
         return "bad"
-    if a > 1.3:
+    if a > ACWR_CAUTION:
         return "warn"
     return "good"
 
@@ -153,11 +155,11 @@ _PAGE = """<title>Semaine {idx} — Backyard Ultra</title>
 :root{{--ground:#f4f6ef;--surface:#fff;--ink:#1a2316;--muted:#5b6552;--hair:#e0e4d8;
 --pine:#356338;--ember:#bf5527;--sage:#e7eede;--sage-ink:#4a6540;
 --good:#3f7d3a;--warn:#c58a1e;--bad:#bf3b2b;--planned:#cdd8c0;--actual:#356338;}}
-:root:not([data-theme=light]){{@media(prefers-color-scheme:dark){{
+@media(prefers-color-scheme:dark){{:root:not([data-theme="light"]){{
 --ground:#0f130c;--surface:#161b11;--ink:#e9eee1;--muted:#98a488;--hair:#2a3222;
 --pine:#7cb377;--ember:#e07d43;--sage:#243019;--sage-ink:#a7c295;
 --good:#7cb377;--warn:#d9a441;--bad:#e0715c;--planned:#39432c;--actual:#7cb377;}}}}
-:root[data-theme=dark]{{--ground:#0f130c;--surface:#161b11;--ink:#e9eee1;--muted:#98a488;
+:root[data-theme="dark"]{{--ground:#0f130c;--surface:#161b11;--ink:#e9eee1;--muted:#98a488;
 --hair:#2a3222;--pine:#7cb377;--ember:#e07d43;--sage:#243019;--sage-ink:#a7c295;
 --good:#7cb377;--warn:#d9a441;--bad:#e0715c;--planned:#39432c;--actual:#7cb377;}}
 *{{box-sizing:border-box}}

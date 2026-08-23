@@ -22,8 +22,8 @@ from .models import Activity, WeekSummary
 STRAVA_API = "https://www.strava.com/api/v3"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 
-# Types d'activités comptées comme "course à pied"
-RUN_TYPES = {"Run", "TrailRun", "VirtualRun", "Treadmill"}
+# Types d'activités comptées comme "course à pied" (valeurs Strava sport_type)
+RUN_TYPES = {"Run", "TrailRun", "VirtualRun"}
 
 
 # --------------------------------------------------------------------------- #
@@ -54,6 +54,10 @@ def refresh_access_token(client_id=None, client_secret=None, refresh_token=None)
         "refresh_token": refresh_token,
     }).encode()
     data = _http(STRAVA_TOKEN_URL, data=body, method="POST")
+    if "access_token" not in data:
+        raise RuntimeError(f"Réponse Strava inattendue au refresh du token : {data}")
+    # NB : Strava peut renvoyer un nouveau refresh_token (data['refresh_token']).
+    # Il n'est pas persisté ici (env var non réinscriptible) — voir RUNBOOK.
     return data["access_token"]
 
 
@@ -74,16 +78,27 @@ def _to_activity(a: dict) -> Activity:
 
 
 def fetch_activities(access_token: str, after: datetime, before: datetime,
-                     per_page: int = 100) -> List[Activity]:
-    """Liste les activités entre `after` et `before` (datetimes aware)."""
-    params = urllib.parse.urlencode({
-        "after": int(after.timestamp()),
-        "before": int(before.timestamp()),
-        "per_page": per_page,
-    })
-    url = f"{STRAVA_API}/athlete/activities?{params}"
-    raw = _http(url, headers={"Authorization": f"Bearer {access_token}"})
-    return [_to_activity(a) for a in raw]
+                     per_page: int = 100, max_pages: int = 20) -> List[Activity]:
+    """Liste les activités entre `after` et `before` (datetimes aware).
+
+    Paginée : boucle jusqu'à une page vide (Strava renvoie 100 max/page).
+    """
+    headers = {"Authorization": f"Bearer {access_token}"}
+    out: List[Activity] = []
+    for page in range(1, max_pages + 1):
+        params = urllib.parse.urlencode({
+            "after": int(after.timestamp()),
+            "before": int(before.timestamp()),
+            "per_page": per_page,
+            "page": page,
+        })
+        raw = _http(f"{STRAVA_API}/athlete/activities?{params}", headers=headers)
+        if not raw:
+            break
+        out.extend(_to_activity(a) for a in raw)
+        if len(raw) < per_page:
+            break
+    return out
 
 
 def load_activities_file(path: str) -> List[Activity]:
@@ -113,11 +128,28 @@ def in_range(acts: List[Activity], start: date, end: date) -> List[Activity]:
     return out
 
 
-def summarize_week(week_acts: List[Activity], planned_time_s: int,
-                   history_acts: Optional[List[Activity]] = None) -> WeekSummary:
-    """Synthèse de la semaine + charge aiguë/chronique si historique fourni.
+# Nombre de semaines d'historique requis pour un ACWR fiable
+ACWR_MIN_HISTORY_WEEKS = 3
 
-    `history_acts` = activités des ~28 derniers jours (pour l'ACWR).
+
+def _earliest_run_date(acts: List[Activity]) -> Optional[date]:
+    dates = []
+    for a in _runs(acts):
+        try:
+            dates.append(datetime.strptime(a.date, "%Y-%m-%d").date())
+        except ValueError:
+            continue
+    return min(dates) if dates else None
+
+
+def summarize_week(week_acts: List[Activity], planned_time_s: int,
+                   history_acts: Optional[List[Activity]] = None,
+                   history_weeks: int = 3, data_available: bool = True) -> WeekSummary:
+    """Synthèse de la semaine + charge aiguë/chronique.
+
+    ACWR **non-couplé** : `history_acts` = les semaines PRÉCÉDANT la semaine
+    évaluée (elle exclue), et le chronique est divisé par le nombre de semaines
+    réellement couvertes (pas un 4.0 en dur). Chronique None si historique < seuil.
     """
     runs = _runs(week_acts)
     total_time = sum(a.moving_time_s for a in runs)
@@ -127,9 +159,9 @@ def summarize_week(week_acts: List[Activity], planned_time_s: int,
 
     acute = total_time / 3600.0
     chronic = None
-    if history_acts:
+    if history_acts and history_weeks >= ACWR_MIN_HISTORY_WEEKS:
         hist_runs = _runs(history_acts)
-        chronic = sum(a.moving_time_s for a in hist_runs) / 3600.0 / 4.0  # moyenne hebdo sur 4 sem.
+        chronic = sum(a.moving_time_s for a in hist_runs) / 3600.0 / history_weeks
 
     return WeekSummary(
         n_runs=len(runs),
@@ -140,6 +172,7 @@ def summarize_week(week_acts: List[Activity], planned_time_s: int,
         planned_time_s=planned_time_s,
         acute_hours=acute,
         chronic_hours=chronic,
+        data_available=data_available,
     )
 
 
@@ -166,12 +199,23 @@ def weekly_actual_hours(acts: List[Activity], start: date, n_weeks: int,
     return buckets
 
 
-def last_week_summary(acts: List[Activity], planned_time_s: int,
-                      today: Optional[date] = None) -> WeekSummary:
-    """Résumé de la semaine calendaire précédente (lun-dim) + ACWR sur 28 j."""
+def completed_week_summary(acts: List[Activity], planned_time_s: int,
+                           today: Optional[date] = None) -> WeekSummary:
+    """Résumé de la semaine qui VIENT DE SE TERMINER, relative au lundi à venir.
+
+    Exécuté un dimanche soir → la semaine évaluée est lun-dim se terminant ce
+    dimanche (celle dont on va prescrire la suivante). Exécuté un lundi → la
+    semaine précédente. Chronique = 3 semaines antérieures (ACWR non-couplé).
+    """
     today = today or datetime.now(timezone.utc).date()
-    this_monday = today - timedelta(days=today.weekday())
-    last_monday = this_monday - timedelta(days=7)
-    week_acts = in_range(acts, last_monday, this_monday)
-    hist = in_range(acts, this_monday - timedelta(days=28), this_monday)
-    return summarize_week(week_acts, planned_time_s, history_acts=hist)
+    um = today + timedelta(days=(7 - today.weekday()) % 7)  # lundi à venir
+    completed_start = um - timedelta(days=7)                 # lundi de la sem. terminée
+    week_acts = in_range(acts, completed_start, um)
+    hist = in_range(acts, completed_start - timedelta(days=21), completed_start)
+
+    earliest = _earliest_run_date(acts)
+    history_weeks = 0
+    if earliest is not None:
+        history_weeks = max(0, min(3, (completed_start - earliest).days // 7))
+    return summarize_week(week_acts, planned_time_s, history_acts=hist,
+                          history_weeks=history_weeks)

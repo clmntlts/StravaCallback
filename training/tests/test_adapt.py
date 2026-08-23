@@ -21,19 +21,28 @@ def summary(adherence, planned_h=4.5, longest_min=90, acwr=None):
 
 
 class TestBands(unittest.TestCase):
-    def test_nominal_keeps_program(self):
+    def test_nominal_keeps_program_when_long_history_sufficient(self):
+        # plus longue récente élevée -> le plafond ne mord pas -> programme tel quel
         w = program.week(9)
-        res = adapt.adapt_week(w, summary(1.0))
+        res = adapt.adapt_week(w, summary(1.0, longest_min=240))
         self.assertEqual(res.band, "nominal")
         self.assertEqual(res.adjustments, [])
         self.assertEqual(workouts.minutes(res.week.sessions["long"]),
                          workouts.minutes(program.week(9).sessions["long"]))
 
+    def test_long_cap_applies_even_in_nominal(self):
+        # LE fix de sécurité : plus longue récente faible -> plafond même en nominal
+        res = adapt.adapt_week(program.week(9), summary(1.0, longest_min=90))
+        self.assertEqual(res.band, "nominal")
+        cap = 90 * adapt.long_growth(program.week(9).phase)
+        self.assertLessEqual(workouts.minutes(res.week.sessions["long"]), cap + 2.5)
+        self.assertTrue(any(a.role == "long" for a in res.adjustments))
+
     def test_consolide_tempers_and_caps_long(self):
         res = adapt.adapt_week(program.week(9), summary(0.73, longest_min=90))
         self.assertEqual(res.band, "consolide")
-        # long plafonné à +15 % de 90' = 103' -> arrondi 105'
-        self.assertLessEqual(workouts.minutes(res.week.sessions["long"]), 105)
+        cap = 90 * adapt.long_growth(program.week(9).phase)
+        self.assertLessEqual(workouts.minutes(res.week.sessions["long"]), cap + 2.5)
         self.assertTrue(any(a.role == "long" for a in res.adjustments))
 
     def test_reprise_regresses(self):
@@ -78,6 +87,22 @@ class TestGuards(unittest.TestCase):
         # planned=0 -> adherence 1.0 -> nominal
         res = adapt.adapt_week(program.week(1), WeekSummary(0, 0, 0, 0, 0, 0))
         self.assertEqual(res.band, "nominal")
+
+    def test_zero_runs_does_not_regress(self):
+        """0 sortie alors qu'il y avait du prévu -> bande verifier, nominal tenu."""
+        last = WeekSummary(0, 0, 0, 0, 0, 16200, data_available=True)
+        res = adapt.adapt_week(program.week(9), last)
+        self.assertEqual(res.band, "verifier")
+        self.assertEqual(res.adjustments, [])
+        self.assertEqual(workouts.minutes(res.week.sessions["long"]),
+                         workouts.minutes(program.week(9).sessions["long"]))
+
+    def test_no_data_source_is_nominal_unadapted(self):
+        last = WeekSummary(0, 0, 0, 0, 0, 0, data_available=False)
+        res = adapt.adapt_week(program.week(9), last)
+        self.assertEqual(res.band, "nominal")
+        self.assertEqual(res.adjustments, [])
+        self.assertIn("Aucune donnée", res.message)
 
 
 if __name__ == "__main__":

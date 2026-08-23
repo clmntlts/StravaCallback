@@ -176,7 +176,6 @@ def _strides(p):
 
 def _long(p):
     m = p["minutes"]
-    h = m / 60
     return (Builder(f"Sortie longue {_hm(m)}")
             .run_time(m, "long", "Effort ultra", 30, 20).build())
 

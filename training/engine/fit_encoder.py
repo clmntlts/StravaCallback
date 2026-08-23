@@ -149,7 +149,10 @@ def _def_record(global_msg_num: int, fields) -> bytes:
 
 
 def _string_field(value: str, length: int) -> bytes:
-    raw = value.encode("utf-8")[: length - 1]
+    raw = value.encode("utf-8")
+    if len(raw) > length - 1:
+        # tronque sans couper un caractère multioctet en plein milieu
+        raw = raw[: length - 1].decode("utf-8", "ignore").encode("utf-8")
     return raw + b"\x00" * (length - len(raw))
 
 

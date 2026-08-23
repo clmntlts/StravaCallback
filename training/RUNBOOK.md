@@ -34,8 +34,16 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
    En cas d'échec (identifiants manquants, Strava indispo), le signaler clairement
    plutôt que d'échouer en silence.
 
-> La semaine est déduite du calendrier (`PROGRAM_START` → semaine courante). Pour
-> forcer une semaine : `python3 generate.py send --live 12`.
+> **Timing dimanche→lundi.** La semaine prescrite est celle qui **commence le
+> lundi à venir** (`target_week_index`), et le réalisé évalué est la semaine
+> lun-dim **qui vient de se terminer**. Un run le dimanche soir cible donc bien
+> la semaine suivante (pas celle qui s'achève). Pour forcer une semaine :
+> `python3 generate.py send --live 12`.
+>
+> **Rotation du refresh token Strava.** Strava peut renvoyer un nouveau
+> `refresh_token` au refresh ; il n'est pas persisté (variable d'env non
+> réinscriptible). Aujourd'hui Strava le laisse généralement stable ; si un run
+> échoue soudainement à l'auth, régénère `STRAVA_REFRESH_TOKEN`.
 
 ## Prérequis (variables d'environnement de l'environnement d'exécution)
 

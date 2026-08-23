@@ -23,6 +23,8 @@ PROGRAM_START = date(2026, 8, 31)
 _env_start = os.environ.get("PROGRAM_START")
 if _env_start:
     PROGRAM_START = datetime.strptime(_env_start, "%Y-%m-%d").date()
+# Toujours ancrer sur un lundi (cohérence des semaines calendaires lun-dim).
+PROGRAM_START = PROGRAM_START - timedelta(days=PROGRAM_START.weekday())
 
 
 def S(template: str, **params) -> SessionSpec:
@@ -141,6 +143,21 @@ def current_week_index(today: Optional[date] = None) -> int:
     if delta < 0:
         return 1
     return min(N_WEEKS, delta // 7 + 1)
+
+
+def upcoming_monday(today: Optional[date] = None) -> date:
+    """Lundi de la semaine d'entraînement à VENIR (aujourd'hui si déjà lundi).
+
+    Permet une exécution dimanche soir : on cible la semaine qui commence demain,
+    et on évalue le réalisé sur la semaine qui vient de se terminer.
+    """
+    today = today or date.today()
+    return today + timedelta(days=(7 - today.weekday()) % 7)
+
+
+def target_week_index(today: Optional[date] = None) -> int:
+    """Semaine de programme à PRESCRIRE lors d'un run (lun. ou dim. soir)."""
+    return current_week_index(upcoming_monday(today))
 
 
 def race_date() -> date:

@@ -17,6 +17,11 @@ ROLE_LABEL = {
 }
 
 
+def ordered_roles(sessions) -> List[str]:
+    """Rôles présents dans l'ordre canonique de la semaine."""
+    return [r for r in ROLES if r in sessions]
+
+
 @dataclass
 class SessionSpec:
     """Une séance = un template paramétrable (durée/reps/intensité).
@@ -75,7 +80,8 @@ class WeekSummary:
     longest_run_s: int
     planned_time_s: int
     acute_hours: Optional[float] = None    # charge 7 j
-    chronic_hours: Optional[float] = None  # charge moyenne hebdo sur 28 j
+    chronic_hours: Optional[float] = None  # charge moyenne hebdo (semaines -2..-4)
+    data_available: bool = True            # False = aucune source Strava fournie
 
     @property
     def actual_hours(self) -> float:

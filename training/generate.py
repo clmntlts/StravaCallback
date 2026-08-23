@@ -30,7 +30,7 @@ sys.path.insert(0, HERE)
 
 from engine import adapt, dashboard, deliver, program, report, strava, workouts  # noqa: E402
 from engine.fit_encoder import write as write_fit                               # noqa: E402
-from engine.models import ROLES, WeekSummary                                    # noqa: E402
+from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
 WORKOUTS_DIR = os.path.join(HERE, "workouts")
 
@@ -43,23 +43,44 @@ def _load_activities(args):
     if args.activities:
         return strava.load_activities_file(args.activities), today
     if getattr(args, "live", False):
-        token = strava.refresh_access_token()
-        now = datetime.now(timezone.utc)
-        span_start = now - timedelta(days=7 * program.N_WEEKS + 7)
-        return strava.fetch_activities(token, span_start, now), today
+        try:
+            token = strava.refresh_access_token()
+            now = datetime.now(timezone.utc)
+            span_start = now - timedelta(days=7 * program.N_WEEKS + 7)
+            return strava.fetch_activities(token, span_start, now), today
+        except Exception as e:
+            raise SystemExit(f"Erreur d'accès Strava : {e}\n"
+                             "Vérifie STRAVA_CLIENT_ID/SECRET/REFRESH_TOKEN et le réseau.")
     return None, today
+
+
+def _prescribed_prev_seconds(week_index, acts, today):
+    """Temps PRESCRIT (adapté) de la semaine N-1, recalculé sans état.
+
+    Compare l'adhérence à ce qui a réellement été demandé la semaine passée
+    (et non au nominal), pour éviter la double peine / le tempérage perpétuel.
+    """
+    if week_index <= 1:
+        return 0
+    prev = program.week(week_index - 1)
+    if acts is None:
+        return int(program.planned_minutes(prev) * 60)
+    ref = program.week_start(week_index - 1)  # lundi de la semaine N-1
+    prev2_s = (int(program.planned_minutes(program.week(week_index - 2)) * 60)
+               if week_index - 1 > 1 else 0)
+    summ = strava.completed_week_summary(acts, prev2_s, today=ref)
+    res_prev = adapt.adapt_week(prev, summ)
+    return int(program.planned_minutes(res_prev.week) * 60)
 
 
 def _prepare_week(week_index, acts, today):
     planned = program.week(week_index)
-    planned_prev_s = 0
-    if week_index > 1:
-        planned_prev_s = int(program.planned_minutes(program.week(week_index - 1)) * 60)
     if acts is None:
-        last = WeekSummary(0, planned_prev_s, 0, 0, 0, planned_prev_s)
+        last = WeekSummary(0, 0, 0, 0, 0, 0, data_available=False)
         actuals = [None] * program.N_WEEKS
     else:
-        last = strava.last_week_summary(acts, planned_prev_s, today=today)
+        planned_prev_s = _prescribed_prev_seconds(week_index, acts, today)
+        last = strava.completed_week_summary(acts, planned_prev_s, today=today)
         actuals = strava.weekly_actual_hours(acts, program.PROGRAM_START,
                                              program.N_WEEKS, today=today)
     res = adapt.adapt_week(planned, last)
@@ -69,7 +90,7 @@ def _prepare_week(week_index, acts, today):
 def _write_week(res, last, actuals, outdir, today):
     os.makedirs(outdir, exist_ok=True)
     files = {}
-    for i, role in enumerate([r for r in ROLES if r in res.week.sessions], start=1):
+    for i, role in enumerate(ordered_roles(res.week.sessions), start=1):
         spec = res.week.sessions[role]
         fname = f"{i}_{role}_{workouts.slug(spec)}.fit"
         write_fit(workouts.build_workout(spec), os.path.join(outdir, fname))
@@ -85,10 +106,18 @@ def _write_week(res, last, actuals, outdir, today):
     return files, dash_path, dash
 
 
+def _resolve_week(args, today):
+    if args.week is not None:
+        if not (1 <= args.week <= program.N_WEEKS):
+            raise SystemExit(f"Semaine {args.week} hors programme (1..{program.N_WEEKS}).")
+        return args.week
+    return program.target_week_index(today)
+
+
 def _print_summary(res, files, outdir):
     print(f"\n=== Semaine {res.week.index} — {res.week.phase} [{res.band}] ===")
     print(res.message)
-    for role in [r for r in ROLES if r in res.week.sessions]:
+    for role in ordered_roles(res.week.sessions):
         print(f"  {role:8} {workouts.label(res.week.sessions[role])}")
     print(f"\n{len(files)} séances .fit + rapport + dashboard → {outdir}")
 
@@ -98,7 +127,7 @@ def _print_summary(res, files, outdir):
 # --------------------------------------------------------------------------- #
 def cmd_week(args):
     acts, today = _load_activities(args)
-    idx = args.week or program.current_week_index(today)
+    idx = _resolve_week(args, today)
     res, last, actuals = _prepare_week(idx, acts, today)
     outdir = args.outdir or os.path.join(WORKOUTS_DIR, f"semaine_{idx:02d}")
     files, dash_path, _ = _write_week(res, last, actuals, outdir, today)
@@ -106,8 +135,12 @@ def cmd_week(args):
 
 
 def cmd_send(args):
+    # Garde-source : ne jamais expédier un plan non adapté sans le dire.
+    if not args.activities and not args.live and not args.dry_run:
+        raise SystemExit("`send` exige une source de données : --live, "
+                         "--activities <fichier>, ou --dry-run pour tester sans envoyer.")
     acts, today = _load_activities(args)
-    idx = args.week or program.current_week_index(today)
+    idx = _resolve_week(args, today)
     res, last, actuals = _prepare_week(idx, acts, today)
     outdir = args.outdir or os.path.join(WORKOUTS_DIR, f"semaine_{idx:02d}")
     files, dash_path, dash_html = _write_week(res, last, actuals, outdir, today)
@@ -117,14 +150,18 @@ def cmd_send(args):
     attachments = [os.path.join(outdir, f) for f in files.values()] + [dash_path]
 
     if args.dry_run:
-        print(f"\n[dry-run] Email NON envoyé.")
+        print("\n[dry-run] Email NON envoyé.")
         print(f"  Sujet : {subject}")
         print(f"  Pièces jointes : {len(attachments)} "
               f"({', '.join(os.path.basename(a) for a in attachments)})")
         return
 
-    to = deliver.send_email(subject, deliver.email_body_html(dash_html),
-                            attachments=attachments)
+    try:
+        to = deliver.send_email(subject, deliver.email_body_html(dash_html),
+                                attachments=attachments)
+    except Exception as e:
+        raise SystemExit(f"Échec de l'envoi email : {e}\n"
+                         "Vérifie GMAIL_ADDRESS / GMAIL_APP_PASSWORD / MAIL_TO.")
     print(f"\n✉️  Email envoyé à {to} ({len(attachments)} pièces jointes).")
 
 

@@ -33,13 +33,27 @@ BAND_REPRISE = 0.60
 BAND_CONSOLIDE = 0.85
 BAND_NOMINAL_HAUT = 1.15
 
-# Plafonds de progression de la sortie longue
-LONG_GROWTH = 1.15         # +15 % max vs plus long réalisé (bandes reprise/consolide)
+# Plafond de progression de la sortie longue, PAR PHASE.
+# Appliqué dans TOUTES les bandes hors décharge : anti-saut de charge inconditionnel,
+# mais plus permissif dans les phases où l'on construit délibérément les grosses
+# simulations (Spécifique/Pic) pour ne pas brider les répétitions générales.
+LONG_GROWTH_DEFAULT = 1.20
+LONG_GROWTH_BY_PHASE = {
+    "Fondation": 1.20,
+    "Force-endurance": 1.35,
+    "Spécifique": 1.75,
+    "Pic": 1.75,
+    "Affûtage": 1.20,
+}
 
-# Seuils ACWR
+# Seuils ACWR (partagés avec le dashboard)
 ACWR_BRAKE = 1.5
 ACWR_CAUTION = 1.3
 ACWR_LOW = 0.8
+
+
+def long_growth(phase: str) -> float:
+    return LONG_GROWTH_BY_PHASE.get(phase, LONG_GROWTH_DEFAULT)
 
 # Planchers de bon sens
 FLOOR_MIN = 20             # minutes minimum d'une séance en durée
@@ -123,7 +137,8 @@ def _band_and_scale(adherence: float) -> Tuple[str, float]:
         return "consolide", 0.90
     if adherence <= BAND_NOMINAL_HAUT:
         return "nominal", 1.0
-    return "vigilance", 1.0
+    # au-dessus du prévu : léger frein pour ne pas empiler la fatigue
+    return "vigilance", 0.95
 
 
 # --------------------------------------------------------------------------- #
@@ -141,11 +156,29 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
             message="Semaine de décharge : conservée telle quelle (récupération programmée).",
         )
 
+    # 1bis) Aucune donnée Strava fournie → on ne fabrique rien : nominal, non adapté.
+    if not last.data_available:
+        return AdaptResult(
+            week=out, adjustments=[], band="nominal", scale=1.0, acwr=None,
+            message="Aucune donnée Strava fournie : semaine prescrite au nominal "
+                    "(non adaptée). Fournir l'activité pour l'adaptation.",
+        )
+
+    # 1ter) Semaine terminée SANS aucune sortie alors qu'il y avait du prévu :
+    # probable trou de synchro plutôt qu'un vrai zéro → on ne régresse pas en
+    # silence, on tient le nominal et on signale pour vérification humaine.
+    if last.planned_time_s > 0 and last.n_runs == 0:
+        return AdaptResult(
+            week=out, adjustments=[], band="verifier", scale=1.0, acwr=last.acwr,
+            message="0 sortie détectée la semaine passée (repos réel ou synchro "
+                    "manquée ?). Semaine tenue au nominal — à vérifier.",
+        )
+
     adherence = last.adherence
     band, scale = _band_and_scale(adherence)
     acwr = last.acwr
 
-    # 3) Garde-fou ACWR : peut durcir le frein
+    # 2) Garde-fou ACWR : peut durcir le frein
     brake_quality = False
     if acwr is not None:
         if acwr > ACWR_BRAKE:
@@ -153,10 +186,8 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
             brake_quality = True
         elif acwr > ACWR_CAUTION:
             scale = min(scale, 0.9)
-        elif acwr < ACWR_LOW and band in ("nominal", "vigilance"):
-            scale = max(scale, 1.0)  # sous-chargé chroniquement : on ne bride pas
 
-    # 2/5) Application du facteur global à chaque séance (structure préservée)
+    # 3) Application du facteur global à chaque séance (structure préservée)
     if scale != 1.0:
         for role, spec in list(out.sessions.items()):
             new = _scaled_spec(spec, scale)
@@ -167,15 +198,17 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
                 ))
             out.sessions[role] = new
 
-    # 4) Plafond de la sortie longue (anti-saut) — bandes reprise/consolide
-    if "long" in out.sessions and band in ("reprise", "consolide") and last.longest_run_s > 0:
+    # 4) Plafond de la sortie longue (anti-saut) — INCONDITIONNEL hors décharge,
+    #    avec un facteur dépendant de la phase (généreux en Spécifique/Pic).
+    growth = long_growth(planned.phase)
+    if "long" in out.sessions and last.longest_run_s > 0:
         long_spec = out.sessions["long"]
-        cap_min = (last.longest_run_s / 60.0) * LONG_GROWTH
+        cap_min = (last.longest_run_s / 60.0) * growth
         if workouts.minutes(long_spec) > cap_min:
             capped = _set_duration(long_spec, cap_min)
             adjustments.append(Adjustment(
                 role="long", before=workouts.label(long_spec), after=workouts.label(capped),
-                reason=(f"plafonnée : +15 % max vs plus long réalisé "
+                reason=(f"plafonnée : +{(growth-1)*100:.0f} % max vs plus long réalisé "
                         f"({last.longest_run_s/60:.0f}' → cap {cap_min:.0f}')"),
             ))
             out.sessions["long"] = capped
