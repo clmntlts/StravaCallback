@@ -11,10 +11,18 @@ Phases : Fondation → Force-endurance → Spécifique → Pic → Affûtage.
 
 from __future__ import annotations
 
-from typing import Dict, List
+import os
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional
 
 from .models import PlannedWeek, SessionSpec
 from . import workouts
+
+# Lundi de la SEMAINE 1 du programme. Override possible via env PROGRAM_START.
+PROGRAM_START = date(2026, 8, 31)
+_env_start = os.environ.get("PROGRAM_START")
+if _env_start:
+    PROGRAM_START = datetime.strptime(_env_start, "%Y-%m-%d").date()
 
 
 def S(template: str, **params) -> SessionSpec:
@@ -111,3 +119,35 @@ def planned_minutes(w: PlannedWeek) -> float:
 
 def planned_hours(w: PlannedWeek) -> float:
     return planned_minutes(w) / 60.0
+
+
+# --------------------------------------------------------------------------- #
+# Ancrage calendaire
+# --------------------------------------------------------------------------- #
+def week_start(index: int) -> date:
+    """Lundi de la semaine `index` (1-based)."""
+    return PROGRAM_START + timedelta(days=7 * (index - 1))
+
+
+def week_end(index: int) -> date:
+    """Dimanche de la semaine `index`."""
+    return week_start(index) + timedelta(days=6)
+
+
+def current_week_index(today: Optional[date] = None) -> int:
+    """Numéro de semaine de programme correspondant à `today` (borné 1..N)."""
+    today = today or date.today()
+    delta = (today - PROGRAM_START).days
+    if delta < 0:
+        return 1
+    return min(N_WEEKS, delta // 7 + 1)
+
+
+def race_date() -> date:
+    """Jour de course = fin de la semaine 34 (samedi = start + 5 j)."""
+    return week_start(N_WEEKS) + timedelta(days=5)
+
+
+def days_to_race(today: Optional[date] = None) -> int:
+    today = today or date.today()
+    return (race_date() - today).days

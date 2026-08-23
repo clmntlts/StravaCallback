@@ -30,7 +30,27 @@ python3 generate.py library
 
 # Régénérer le plan (plan.md + plan.html) depuis le programme
 python3 generate.py plan
+
+# Pipeline hebdo complet + envoi email (dashboard + .fit en pièces jointes)
+python3 generate.py send --live               # semaine courante (calendrier)
+python3 generate.py send --live 12            # forcer une semaine
+python3 generate.py send --activities tests/fixtures/last_week_sample.json \
+        --today 2026-09-14 --dry-run          # test hors-ligne, sans envoyer
 ```
+
+## Automatisation hebdomadaire (Claude = le moteur)
+
+Chaque **dimanche ~18h (Europe/Paris)**, une Routine Claude planifiée réveille une
+session qui agrège la semaine Strava écoulée, décide la semaine à venir (jugement
+de coach dans les limites de `program.py`/`adapt.py`), génère les `.FIT` + un
+**dashboard visuel de progression**, et les **envoie par email** (Gmail).
+
+Le déroulé exact et les variables d'environnement requises (`STRAVA_*`, `GMAIL_*`)
+sont dans **[`RUNBOOK.md`](RUNBOOK.md)**.
+
+- `engine/dashboard.py` — dashboard HTML autonome (courbe prévu vs réalisé,
+  adhérence, position dans le plan, séances de la semaine, bilan N-1).
+- `engine/deliver.py` — envoi SMTP Gmail (stdlib) avec pièces jointes.
 
 `generate.py week N` écrit dans `workouts/semaine_NN/` :
 - un `.fit` par séance (à importer dans Garmin Connect),
@@ -83,15 +103,18 @@ training/
   generate.py         # CLI (week / library / plan)
   engine/
     models.py         # types (SessionSpec, PlannedWeek, WeekSummary, Adjustment)
-    program.py        # programme 34 semaines (source unique)
+    program.py        # programme 34 semaines + ancrage calendaire (source unique)
     workouts.py       # templates de séances paramétrables + allures
-    adapt.py          # moteur adaptatif
-    strava.py         # client Strava + synthèse hebdo
+    adapt.py          # moteur adaptatif (garde-fous)
+    strava.py         # client Strava + synthèse hebdo + agrégation par semaine
+    dashboard.py      # dashboard hebdo visuel (HTML autonome)
+    deliver.py        # envoi email Gmail (SMTP, pièces jointes)
     report.py         # rapports md/json + (re)génération du plan
     fit_encoder.py    # encodeur FIT sans dépendance
   tests/              # tests unitaires (python3 -m unittest discover -s tests)
   workouts/           # séances .fit générées
   plan.md / plan.html # plan macro (vue d'ensemble)
+  RUNBOOK.md          # procédure d'automatisation hebdomadaire
 ```
 
 ## Tests

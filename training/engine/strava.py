@@ -143,6 +143,29 @@ def summarize_week(week_acts: List[Activity], planned_time_s: int,
     )
 
 
+def weekly_actual_hours(acts: List[Activity], start: date, n_weeks: int,
+                        today: Optional[date] = None) -> List[Optional[float]]:
+    """Heures de course réelles par semaine de programme (index 0 = semaine 1).
+
+    None = semaine future (postérieure à aujourd'hui) → pas encore de données.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    buckets: List[Optional[float]] = [None] * n_weeks
+    for i in range(n_weeks):
+        wk_start = start + timedelta(days=7 * i)
+        if wk_start <= today:
+            buckets[i] = 0.0  # semaine échue ou en cours : 0 par défaut
+    for a in _runs(acts):
+        try:
+            d = datetime.strptime(a.date, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        idx = (d - start).days // 7
+        if 0 <= idx < n_weeks and buckets[idx] is not None:
+            buckets[idx] += a.moving_time_s / 3600.0
+    return buckets
+
+
 def last_week_summary(acts: List[Activity], planned_time_s: int,
                       today: Optional[date] = None) -> WeekSummary:
     """Résumé de la semaine calendaire précédente (lun-dim) + ACWR sur 28 j."""
