@@ -5,8 +5,8 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine import adapt, dashboard, deliver, program, strava
-from engine.models import Activity, WeekSummary
+from engine import adapt, dashboard, deliver, garmin, garmin_workout, program, strava
+from engine.models import Activity, SessionSpec, WeekSummary
 
 
 class TestCalendar(unittest.TestCase):
@@ -82,6 +82,39 @@ class TestDeliverGuards(unittest.TestCase):
     def test_fit_mime_is_octet_stream(self):
         self.assertEqual(deliver._guess_mime("01_easy.fit"), ("application", "octet-stream"))
         self.assertEqual(deliver._guess_mime("dashboard.html")[0], "text")
+
+
+class TestGarminTranslate(unittest.TestCase):
+    def test_interval_nests_repeat_block(self):
+        w = garmin_workout.session_to_garmin(
+            SessionSpec("threshold", {"reps": 3, "rep_min": 10, "rec_min": 2}))
+        self.assertEqual(w["sport"], "RUNNING")
+        self.assertGreater(w["estimatedDurationInSecs"], 0)
+        reps = [s for s in w["steps"] if s.get("type") == "WorkoutRepeatStep"]
+        self.assertEqual(len(reps), 1)
+        self.assertEqual(reps[0]["repeatValue"], 3)
+        self.assertEqual(len(reps[0]["steps"]), 2)  # effort + récup
+        wu = w["steps"][0]
+        self.assertEqual(wu["intensity"], "WARMUP")
+        self.assertLess(wu["targetValueLow"], wu["targetValueHigh"])
+
+    def test_step_orders_are_unique(self):
+        w = garmin_workout.session_to_garmin(SessionSpec("backyard", {"loops": 4}))
+        orders = []
+        def walk(nodes):
+            for n in nodes:
+                orders.append(n["stepOrder"])
+                if n.get("type") == "WorkoutRepeatStep":
+                    walk(n["steps"])
+        walk(w["steps"])
+        self.assertEqual(len(orders), len(set(orders)))
+
+
+class TestGarminConfig(unittest.TestCase):
+    def test_not_configured_without_env(self):
+        for k in ("GARMIN_CONSUMER_KEY", "GARMIN_CONSUMER_SECRET", "GARMIN_REFRESH_TOKEN"):
+            os.environ.pop(k, None)
+        self.assertFalse(garmin.is_configured())
 
 
 if __name__ == "__main__":

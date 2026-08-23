@@ -26,10 +26,13 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
    régénérer avec un `--week` différent, ou ajuster puis re-générer). Sinon, la
    proposition déterministe fait foi. Ne jamais sortir de la structure macro.
 4. **Envoyer** l'email (dashboard en corps + `.fit` et `dashboard.html` en pièces
-   jointes) :
+   jointes) et **planifier sur Garmin si configuré** :
    ```bash
-   python3 generate.py send --live
+   python3 generate.py send --live --push-garmin
    ```
+   `--push-garmin` crée + planifie chaque séance au bon jour sur Garmin Connect
+   **si** les identifiants Garmin sont définis ; sinon il est ignoré proprement
+   (l'email/`.FIT` reste le mode de livraison).
 5. **Confirmer** : l'email indique le destinataire et le nombre de pièces jointes.
    En cas d'échec (identifiants manquants, Strava indispo), le signaler clairement
    plutôt que d'échouer en silence.
@@ -56,6 +59,11 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GMAIL_APP_PASSWORD` | Mot de passe d'application Google (2FA requise) |
 | `MAIL_TO` | Destinataire (défaut : `GMAIL_ADDRESS`) |
 | `PROGRAM_START` | *(optionnel)* Lundi de la semaine 1 (`YYYY-MM-DD`) pour aligner le calendrier |
+| `GARMIN_CONSUMER_KEY` | *(push Garmin)* client id de l'app Garmin (Developer Program) |
+| `GARMIN_CONSUMER_SECRET` | *(push Garmin)* client secret |
+| `GARMIN_REFRESH_TOKEN` | *(push Garmin)* token utilisateur (après consentement, voir ci-dessous) |
+| `GARMIN_REDIRECT_URI` | *(auth Garmin)* URL de redirection déclarée sur l'app |
+| `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
 
 - Jeton Strava : créer une app sur https://www.strava.com/settings/api, autoriser
   le scope `activity:read`, échanger le code contre un `refresh_token`. (Le callback
@@ -64,6 +72,29 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 
 Sans ces variables, `generate.py send --live` s'arrête avec un message explicite.
 Pour tester hors-ligne : `python3 generate.py send --activities tests/fixtures/last_week_sample.json --today 2026-09-14 --dry-run`.
+
+## Push Garmin (API officielle, Training API)
+
+Livraison directe sur la montre (calendrier Garmin Connect) au lieu de l'import
+manuel des `.FIT`. Optionnel et **conditionnel** : actif seulement si les
+`GARMIN_*` sont définis.
+
+Autorisation utilisateur (une fois) :
+```bash
+# 1) génère l'URL de consentement + le code_verifier (requiert GARMIN_CONSUMER_KEY, GARMIN_REDIRECT_URI)
+python3 generate.py garmin-auth-url
+# 2) ouvre l'URL, autorise, récupère le ?code=… du redirect, puis :
+python3 generate.py garmin-auth-exchange --code <CODE> --verifier <VERIFIER>
+# 3) stocke le refresh_token renvoyé dans GARMIN_REFRESH_TOKEN
+```
+Ensuite, `--push-garmin` planifie automatiquement les 4 séances de la semaine
+(mardi qualité, jeudi facile, samedi longue, dimanche B2B).
+
+> ⚠️ Les URLs OAuth/Training API et le schéma JSON des workouts sont centralisés
+> dans `engine/garmin.py` et `engine/garmin_workout.py` avec des repères
+> « RÉCONCILIATION » : vérifie-les avec ta console développeur Garmin et
+> surcharge via les `GARMIN_*_URL` si besoin. Le push réel n'a pas pu être testé
+> sans ton compte ; le traducteur JSON, lui, est couvert par les tests.
 
 ## Alternative connecteurs
 

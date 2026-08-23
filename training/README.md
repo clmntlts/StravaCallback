@@ -36,6 +36,9 @@ python3 generate.py send --live               # semaine courante (calendrier)
 python3 generate.py send --live 12            # forcer une semaine
 python3 generate.py send --activities tests/fixtures/last_week_sample.json \
         --today 2026-09-14 --dry-run          # test hors-ligne, sans envoyer
+
+# + planifier directement sur Garmin (si GARMIN_* définis, sinon ignoré)
+python3 generate.py send --live --push-garmin
 ```
 
 ## Automatisation hebdomadaire (Claude = le moteur)
@@ -109,6 +112,8 @@ training/
     strava.py         # client Strava + synthèse hebdo + agrégation par semaine
     dashboard.py      # dashboard hebdo visuel (HTML autonome)
     deliver.py        # envoi email Gmail (SMTP, pièces jointes)
+    garmin.py         # client Garmin (OAuth + Training API : create/schedule)
+    garmin_workout.py # traducteur SessionSpec -> JSON workout Garmin
     report.py         # rapports md/json + (re)génération du plan
     fit_encoder.py    # encodeur FIT sans dépendance
   tests/              # tests unitaires (python3 -m unittest discover -s tests)

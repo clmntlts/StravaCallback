@@ -28,11 +28,15 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from engine import adapt, dashboard, deliver, program, report, strava, workouts  # noqa: E402
+from engine import (adapt, dashboard, deliver, garmin, garmin_workout,           # noqa: E402
+                    program, report, strava, workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
 WORKOUTS_DIR = os.path.join(HERE, "workouts")
+
+# Décalage (jours) du rôle par rapport au lundi de la semaine (week_start)
+ROLE_OFFSET = {"quality": 1, "easy": 3, "long": 5, "b2b": 6}  # Mar/Jeu/Sam/Dim
 
 
 # --------------------------------------------------------------------------- #
@@ -114,6 +118,30 @@ def _resolve_week(args, today):
     return program.target_week_index(today)
 
 
+def _push_garmin(res, idx):
+    """Crée + planifie chaque séance sur Garmin (si configuré). Repli sinon."""
+    if not garmin.is_configured():
+        print("\n[garmin] non configuré (GARMIN_CONSUMER_KEY/SECRET/REFRESH_TOKEN) "
+              "— push ignoré, email/FIT conservés.")
+        return
+    try:
+        token = garmin.get_access_token()
+    except Exception as e:
+        print(f"\n[garmin] échec d'authentification : {e}\n"
+              "         push ignoré, email/FIT conservés.")
+        return
+    print("\n[garmin] planification des séances :")
+    for role in ordered_roles(res.week.sessions):
+        spec = res.week.sessions[role]
+        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
+        try:
+            wid = garmin.push_and_schedule(garmin_workout.session_to_garmin(spec), d,
+                                           access_token=token)
+            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
+        except Exception as e:
+            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+
+
 def _print_summary(res, files, outdir):
     print(f"\n=== Semaine {res.week.index} — {res.week.phase} [{res.band}] ===")
     print(res.message)
@@ -132,6 +160,8 @@ def cmd_week(args):
     outdir = args.outdir or os.path.join(WORKOUTS_DIR, f"semaine_{idx:02d}")
     files, dash_path, _ = _write_week(res, last, actuals, outdir, today)
     _print_summary(res, files, outdir)
+    if getattr(args, "push_garmin", False):
+        _push_garmin(res, idx)
 
 
 def cmd_send(args):
@@ -164,6 +194,9 @@ def cmd_send(args):
                          "Vérifie GMAIL_ADDRESS / GMAIL_APP_PASSWORD / MAIL_TO.")
     print(f"\n✉️  Email envoyé à {to} ({len(attachments)} pièces jointes).")
 
+    if getattr(args, "push_garmin", False):
+        _push_garmin(res, idx)
+
 
 def cmd_library(args):
     os.makedirs(WORKOUTS_DIR, exist_ok=True)
@@ -185,6 +218,22 @@ def cmd_plan(args):
     print("plan.md régénéré" + (" + plan.html mis à jour" if os.path.exists(html) else ""))
 
 
+def cmd_garmin_auth_url(args):
+    verifier, challenge = garmin.make_pkce()
+    print("1) Ouvre cette URL dans un navigateur et autorise l'accès :\n")
+    print("   " + garmin.authorize_url(challenge))
+    print("\n2) Après redirection, récupère le paramètre ?code=… puis lance :")
+    print(f"   python3 generate.py garmin-auth-exchange --code <CODE> --verifier {verifier}")
+    print("\n(Requiert GARMIN_CONSUMER_KEY et GARMIN_REDIRECT_URI en variables d'env.)")
+
+
+def cmd_garmin_auth_exchange(args):
+    tokens = garmin.exchange_code(args.code, args.verifier)
+    print(json.dumps(tokens, ensure_ascii=False, indent=2))
+    if "refresh_token" in tokens:
+        print("\n➡️  Stocke ce refresh_token en variable d'env GARMIN_REFRESH_TOKEN.")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Moteur d'entraînement adaptatif backyard ultra")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -198,16 +247,30 @@ def main(argv=None):
     pw = sub.add_parser("week", help="Génère une semaine adaptée (fit + rapport + dashboard)")
     pw.add_argument("week", type=int, nargs="?", help="Numéro de semaine (défaut : semaine courante)")
     add_src(pw)
+    pw.add_argument("--push-garmin", action="store_true",
+                    help="Planifie les séances sur Garmin si configuré (sinon ignoré)")
     pw.set_defaults(func=cmd_week)
 
     ps = sub.add_parser("send", help="Pipeline hebdo complet + envoi email")
     ps.add_argument("week", type=int, nargs="?", help="Numéro de semaine (défaut : semaine courante)")
     add_src(ps)
     ps.add_argument("--dry-run", action="store_true", help="Génère sans envoyer l'email")
+    ps.add_argument("--push-garmin", action="store_true",
+                    help="Planifie les séances sur Garmin si configuré (sinon ignoré)")
     ps.set_defaults(func=cmd_send)
 
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
+
+    pau = sub.add_parser("garmin-auth-url",
+                         help="Étape 1 auth Garmin : imprime l'URL de consentement + le verifier")
+    pau.set_defaults(func=cmd_garmin_auth_url)
+
+    pex = sub.add_parser("garmin-auth-exchange",
+                         help="Étape 2 auth Garmin : échange le code contre les tokens")
+    pex.add_argument("--code", required=True, help="Code d'autorisation (paramètre ?code= du redirect)")
+    pex.add_argument("--verifier", required=True, help="code_verifier imprimé à l'étape 1")
+    pex.set_defaults(func=cmd_garmin_auth_exchange)
 
     args = p.parse_args(argv)
     args.func(args)
