@@ -135,6 +135,19 @@ class TestCoach(unittest.TestCase):
         self.assertIn("course", a.headline.lower())
         self.assertTrue(a.recommendations)
 
+    def test_trends_from_history(self):
+        acts = strava.load_activities_file(
+            os.path.join(os.path.dirname(__file__), "fixtures", "last_week_sample.json"))
+        today = date(2026, 9, 14)
+        summ = strava.completed_week_summary(acts, 16000, today=today)
+        weeks = strava.recent_completed_weeks(acts, today=today, n=4)
+        ws = program.upcoming_monday(today) - timedelta(days=7)
+        a = coach.analyze(summ, weeks[0], weeks[1:], week_start=ws)
+        self.assertTrue(a.trends)
+        self.assertTrue(any("Volume" in t for t in a.trends))
+        # la fixture porte de la FC sur plusieurs semaines -> tendance EF présente
+        self.assertTrue(any("aérobie" in t for t in a.trends))
+
 
 class TestGarminConfig(unittest.TestCase):
     def test_not_configured_without_env(self):

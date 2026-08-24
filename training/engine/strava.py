@@ -206,6 +206,18 @@ def completed_week_runs(acts: List[Activity], today: Optional[date] = None) -> L
     return _runs(in_range(acts, um - timedelta(days=7), um))
 
 
+def recent_completed_weeks(acts: List[Activity], today: Optional[date] = None,
+                           n: int = 4) -> List[List[Activity]]:
+    """Courses des `n` dernières semaines terminées ; index 0 = la plus récente."""
+    today = today or datetime.now(timezone.utc).date()
+    um = today + timedelta(days=(7 - today.weekday()) % 7)
+    out = []
+    for k in range(n):
+        end = um - timedelta(days=7 * k)
+        out.append(_runs(in_range(acts, end - timedelta(days=7), end)))
+    return out
+
+
 def completed_week_summary(acts: List[Activity], planned_time_s: int,
                            today: Optional[date] = None) -> WeekSummary:
     """Résumé de la semaine qui VIENT DE SE TERMINER, relative au lundi à venir.

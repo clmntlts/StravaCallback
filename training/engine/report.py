@@ -32,6 +32,9 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=No
         if analysis.observations:
             L.append("\n_Constats :_")
             L.extend(f"- {o}" for o in analysis.observations)
+        if getattr(analysis, "trends", None):
+            L.append("\n_Tendances (4 sem.) :_")
+            L.extend(f"- {t}" for t in analysis.trends)
         if analysis.recommendations:
             L.append("\n_À travailler :_")
             L.extend(f"- {r}" for r in analysis.recommendations)
@@ -110,6 +113,7 @@ def week_report_json(res: AdaptResult, last: WeekSummary, files: dict, analysis=
         data["analysis"] = {
             "headline": analysis.headline,
             "observations": analysis.observations,
+            "trends": getattr(analysis, "trends", []),
             "recommendations": analysis.recommendations,
         }
     return data

@@ -137,11 +137,16 @@ def _analysis_html(analysis) -> str:
         return ""
     obs = "".join(f"<li>{_esc(o)}</li>" for o in analysis.observations)
     rec = "".join(f"<li>{_esc(r)}</li>" for r in analysis.recommendations)
+    trends = ""
+    if getattr(analysis, "trends", None):
+        tr = "".join(f"<li>{_esc(t)}</li>" for t in analysis.trends)
+        trends = f'<div class="h3">Tendances (4 sem.)</div><ul class="trd">{tr}</ul>'
     return (
         '<section class="card">'
         '<div class="h2">Debrief de la semaine passée</div>'
         f'<p class="verdict">{_esc(analysis.headline)}</p>'
         f'<div class="h3">Constats</div><ul class="obs">{obs}</ul>'
+        f'{trends}'
         f'<div class="h3">À travailler</div><ul class="rec">{rec}</ul>'
         '</section>')
 
@@ -269,6 +274,8 @@ td.n{{text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--accen
   color:var(--accent-ink); margin:0 0 6px}}
 ul.obs,ul.rec{{margin:2px 0 0; padding-left:1.05em}}
 ul.obs li{{margin:.32em 0; font-size:.94rem}}
+ul.trd{{margin:2px 0 0; padding-left:1.05em}}
+ul.trd li{{margin:.3em 0; font-size:.92rem; color:var(--muted)}}
 ul.rec li{{margin:.36em 0; font-size:.94rem; font-weight:500}}
 ul.rec li::marker{{color:var(--accent)}}
 

@@ -82,15 +82,17 @@ def _prepare_week(week_index, acts, today):
     if acts is None:
         last = WeekSummary(0, 0, 0, 0, 0, 0, data_available=False)
         actuals = [None] * program.N_WEEKS
-        week_runs = []
+        week_runs, history_runs = [], []
     else:
         planned_prev_s = _prescribed_prev_seconds(week_index, acts, today)
         last = strava.completed_week_summary(acts, planned_prev_s, today=today)
         actuals = strava.weekly_actual_hours(acts, program.PROGRAM_START,
                                              program.N_WEEKS, today=today)
-        week_runs = strava.completed_week_runs(acts, today=today)
+        weeks = strava.recent_completed_weeks(acts, today=today, n=4)
+        week_runs, history_runs = weeks[0], weeks[1:]
     res = adapt.adapt_week(planned, last)
-    analysis = coach.analyze(last, week_runs)
+    ws = program.upcoming_monday(today) - timedelta(days=7)
+    analysis = coach.analyze(last, week_runs, history_runs, week_start=ws)
     return res, last, actuals, analysis
 
 
