@@ -22,16 +22,20 @@ check() {
   for v in "$@"; do val="${!v:-}"; [ -n "$val" ] || ok=0; done
   [ "$ok" -eq 1 ] && echo "  [x] $name" || echo "  [ ] $name (non configuré)"
 }
-check "Strava (lecture activités)" STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET STRAVA_REFRESH_TOKEN
-check "Gmail (envoi email)"         GMAIL_ADDRESS GMAIL_APP_PASSWORD MAIL_TO
-check "Garmin (push séances)"       GARMIN_CONSUMER_KEY GARMIN_CONSUMER_SECRET GARMIN_REFRESH_TOKEN
+check "Strava (lecture activités)"        STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET STRAVA_REFRESH_TOKEN
+check "Gmail (envoi email)"               GMAIL_ADDRESS GMAIL_APP_PASSWORD MAIL_TO
+check "Garmin Training API (officielle)"  GARMIN_CONSUMER_KEY GARMIN_CONSUMER_SECRET GARMIN_REFRESH_TOKEN
+check "Garmin Connect (non-officiel)"     GARMIN_EMAIL GARMIN_PASSWORD
 
 echo
 echo "Pour agir :"
 echo "  - Semaine (test hors-ligne) :"
 echo "      python3 training/generate.py week --activities training/tests/fixtures/last_week_sample.json --today 2026-09-14"
 echo "  - Envoi hebdo (données réelles) :"
-echo "      python3 training/generate.py send --live --push-garmin"
+echo "      python3 training/generate.py send --live"
+echo "  - Planifier au calendrier Garmin (séance du jour à date fixe) :"
+echo "      pip install garminconnect ; python3 training/generate.py garmin-connect-login"
+echo "      python3 training/generate.py send --live --push-connect"
 echo "  - Obtenir un token Strava (une fois) :"
 echo "      python3 training/generate.py strava-auth-url"
 echo "  - Tests :"

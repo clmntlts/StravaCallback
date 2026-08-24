@@ -64,6 +64,9 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GARMIN_REFRESH_TOKEN` | *(push Garmin)* token utilisateur (après consentement, voir ci-dessous) |
 | `GARMIN_REDIRECT_URI` | *(auth Garmin)* URL de redirection déclarée sur l'app |
 | `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
+| `GARMIN_EMAIL` | *(push Connect non-officiel)* identifiant du compte Garmin Connect |
+| `GARMIN_PASSWORD` | *(push Connect non-officiel)* mot de passe du compte |
+| `GARMIN_TOKENSTORE` | *(option)* dossier des jetons Connect (défaut `~/.garminconnect`) |
 
 - Jeton Strava : créer une app sur https://www.strava.com/settings/api, puis
   utiliser les commandes intégrées (aucun service externe requis) :
@@ -96,6 +99,31 @@ Ensuite, `--push-garmin` planifie automatiquement les 4 séances de la semaine
 > « RÉCONCILIATION » : vérifie-les avec ta console développeur Garmin et
 > surcharge via les `GARMIN_*_URL` si besoin. Le push réel n'a pas pu être testé
 > sans ton compte ; le traducteur JSON, lui, est couvert par les tests.
+
+## Push Garmin Connect (voie non-officielle, `--push-connect`)
+
+Alternative qui **fonctionne sans validation Garmin** : elle upload la séance
+**et la planifie au calendrier** Garmin Connect (donc *séance du jour* à date
+fixe sur la montre). Pourquoi cette voie existe : **copier un `.FIT` sur la
+montre ne fait qu'ajouter la séance à la bibliothèque, jamais à une date** — seul
+le calendrier Connect donne le rappel automatique du bon jour.
+
+Contrepartie : **dépendance externe** (`pip install garminconnect`) et **API
+rétro-ingénierée** susceptible de casser si Garmin change son service. Le reste
+du moteur reste *stdlib-only* (import paresseux de la lib, uniquement au login).
+
+```bash
+pip install garminconnect
+export GARMIN_EMAIL=…  GARMIN_PASSWORD=…
+python3 generate.py garmin-connect-login          # login + stockage des jetons (MFA incluse), une fois
+python3 generate.py send --live --push-connect    # upload + planification des 4 séances
+```
+
+> ⚠️ Le schéma JSON du service `/workout-service` est dans
+> `engine/garmin_connect.py`. Le traducteur est couvert par les tests ; l'upload
+> réel demande ton compte Garmin. Pour un run **automatique/planifié** (Routine
+> hebdo, sans humain), lance `garmin-connect-login` **une fois** au préalable :
+> les jetons du tokenstore évitent de repasser la MFA.
 
 ## Alternative connecteurs
 

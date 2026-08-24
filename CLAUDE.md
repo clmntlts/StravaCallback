@@ -25,7 +25,10 @@ Règles :
 ## Développement `training/`
 
 - Tests : `cd training && python3 -m unittest discover -s tests`
-- Sans dépendances externes (stdlib) ; `fitdecode` seulement pour valider les FIT.
+- Cœur sans dépendances externes (stdlib). Dépendances **optionnelles**
+  (`training/requirements-optional.txt`, import paresseux, jamais requises pour
+  générer/tester) : `fitdecode` pour valider les FIT, `garminconnect` pour la
+  planification au calendrier Garmin Connect (`send --push-connect`).
 - Ne pas éditer les `.fit` à la main : régénérer via `python3 training/generate.py library`.
 - Source unique de la structure : `training/engine/program.py`.
 - **Paramètres & mémoire intersessions** : `training/athlete.json` (objectif, date de

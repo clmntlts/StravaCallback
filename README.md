@@ -158,14 +158,16 @@ Toutes les commandes se lancent depuis `training/` : `python3 generate.py <cmd>`
 | `plan` | Régénère la vue d'ensemble du plan (`plan.md` + `plan.html`). |
 | `config` | Affiche le profil effectif et les valeurs dérivées (durée, semaine 1, échelle…). |
 | `strava-auth-url` / `strava-auth-exchange` | Autorisation Strava en deux étapes → `refresh_token` (une seule fois). |
-| `garmin-auth-url` / `garmin-auth-exchange` | Autorisation Garmin en deux étapes (une seule fois). |
+| `garmin-auth-url` / `garmin-auth-exchange` | Autorisation Garmin **Training API** (officielle) en deux étapes (une seule fois). |
+| `garmin-connect-login` | Login Garmin **Connect** (voie non-officielle) : stocke les jetons (MFA incluse) pour les runs suivants. |
 
 Options communes à `week`/`send` :
 
 - `--live` — lit Strava en direct (variables d'environnement requises).
 - `--activities <fichier.json>` — lit un export/fixture d'activités (hors-ligne).
 - `--today YYYY-MM-DD` — date de référence (tests/simulation).
-- `--push-garmin` — planifie les séances dans Garmin **si configuré** (sinon ignoré).
+- `--push-garmin` — planifie via la **Training API officielle** **si configurée** (sinon ignoré).
+- `--push-connect` — planifie au **calendrier Garmin Connect** (voie non-officielle) **si configuré** (sinon ignoré).
 - `--dry-run` (sur `send`) — génère tout **sans** envoyer l'email.
 
 Exemples :
@@ -236,12 +238,35 @@ Le même contenu est disponible en `rapport.md` (lisible) et `rapport.json`
 
 **Email (Gmail, SMTP)** — le mode par défaut, universel :
 le dashboard est le corps du message, les `.FIT` et le dashboard sont en pièces
-jointes. Il suffit de les importer dans Garmin Connect (Entraînement →
-Entraînements → Importer), puis de les planifier.
+jointes.
+
+> ⚠️ **Important — les `.FIT` de séance ne s'importent PAS dans Garmin Connect.**
+> Connect (web et app) n'accepte l'upload de fichiers que pour des *activités
+> terminées*, pas pour des *séances planifiées*. Pour charger un `.FIT` de
+> séance, il faut **brancher la montre en USB et copier le fichier dans le
+> dossier `GARMIN/NEWFILES`** : la séance apparaît alors dans **Entraînement ▸
+> Mes séances** — dans la **bibliothèque uniquement**. Elle n'est **pas planifiée
+> à une date** et ne s'affiche donc pas comme *séance du jour* ; il faut la
+> sélectionner à la main. Pour une planification à date fixe, utiliser une des
+> deux voies API ci-dessous.
+
+**Garmin Connect (voie non-officielle)** — optionnel, `--push-connect` :
+la séance est **uploadée puis planifiée au calendrier** Garmin Connect ; elle se
+synchronise sur la montre et **apparaît comme séance du jour à la bonne date**.
+C'est la voie qui marche *tout de suite* (login compte Garmin, pas de validation
+Garmin), au prix d'une **dépendance externe** (`pip install garminconnect`) et
+d'une API rétro-ingénierée qui peut casser si Garmin change son service.
+
+```bash
+pip install garminconnect                    # dépendance optionnelle
+export GARMIN_EMAIL=…  GARMIN_PASSWORD=…      # compte Garmin Connect
+python3 generate.py garmin-connect-login      # login une fois (stocke les jetons, MFA incluse)
+python3 generate.py send --live --push-connect
+```
 
 **Garmin (API officielle Training API)** — optionnel, `--push-garmin` :
-les séances sont **créées et planifiées** directement dans Garmin Connect et se
-synchronisent sur la montre. Nécessite un compte Garmin Developer Program et une
+même résultat (création + planification), par la voie *propre*. Nécessite un
+compte **Garmin Developer Program** (validation manuelle par Garmin) et une
 autorisation OAuth unique :
 
 ```bash
@@ -251,12 +276,13 @@ python3 generate.py garmin-auth-exchange --code <CODE> --verifier <VERIFIER>
 ```
 
 > Les URLs OAuth/Training API et le schéma JSON des workouts sont centralisés,
-> avec des repères « RÉCONCILIATION », dans `engine/garmin.py` et
-> `engine/garmin_workout.py` — à confirmer avec la console développeur Garmin et
-> surchargeables par variables d'environnement, sans modifier le code.
+> avec des repères « RÉCONCILIATION », dans `engine/garmin.py`,
+> `engine/garmin_workout.py` (Training API) et `engine/garmin_connect.py`
+> (Connect non-officiel) — surchargeables sans modifier le reste du code.
 
-Si les identifiants Garmin ne sont pas définis, `--push-garmin` est **ignoré
-proprement** et la livraison email/`.FIT` reste en place.
+Si les identifiants ne sont pas définis (ou la lib absente), `--push-garmin` /
+`--push-connect` sont **ignorés proprement** et la livraison email/`.FIT` reste
+en place. Les deux drapeaux sont cumulables et indépendants.
 
 ---
 
@@ -293,8 +319,9 @@ training/
     strava.py         # client Strava (refresh token, activités, synthèses)
     dashboard.py      # dashboard hebdo (HTML autonome)
     deliver.py        # envoi email Gmail (SMTP, pièces jointes)
-    garmin.py         # client Garmin (OAuth + Training API : create/schedule)
-    garmin_workout.py # traducteur séance -> JSON workout Garmin
+    garmin.py         # client Garmin Training API officielle (OAuth : create/schedule)
+    garmin_workout.py # traducteur séance -> JSON Training API
+    garmin_connect.py # client Garmin Connect non-officiel (upload + planif calendrier)
     report.py         # rapports md/json + génération de la vue plan
     fit_encoder.py    # encodeur FIT sans dépendance
     models.py         # types de données
@@ -342,9 +369,13 @@ Accès Strava (lecture des activités) :
 Envoi email (Gmail) :
 `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `MAIL_TO`.
 
-Push Garmin (optionnel) :
+Push Garmin — Training API officielle (optionnel) :
 `GARMIN_CONSUMER_KEY`, `GARMIN_CONSUMER_SECRET`, `GARMIN_REFRESH_TOKEN`,
 `GARMIN_REDIRECT_URI`, `GARMIN_SCOPE`.
+
+Push Garmin — Connect non-officiel (optionnel, `--push-connect`, requiert
+`pip install garminconnect`) :
+`GARMIN_EMAIL`, `GARMIN_PASSWORD`, `GARMIN_TOKENSTORE` *(option, défaut `~/.garminconnect`)*.
 
 Les secrets ne sont **jamais** committés : ils vivent dans l'environnement
 d'exécution.

@@ -5,8 +5,8 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine import (adapt, coach, dashboard, deliver, garmin, garmin_workout,
-                    program, strava)
+from engine import (adapt, coach, dashboard, deliver, garmin, garmin_connect,
+                    garmin_workout, program, strava)
 from engine.models import Activity, SessionSpec, WeekSummary
 
 
@@ -109,6 +109,56 @@ class TestGarminTranslate(unittest.TestCase):
                     walk(n["steps"])
         walk(w["steps"])
         self.assertEqual(len(orders), len(set(orders)))
+
+
+class TestGarminConnectTranslate(unittest.TestCase):
+    def test_schema_top_level(self):
+        w = garmin_connect.session_to_connect(SessionSpec("easy", {"minutes": 45}))
+        self.assertEqual(w["sportType"]["sportTypeKey"], "running")
+        self.assertGreater(w["estimatedDurationInSecs"], 0)
+        self.assertEqual(len(w["workoutSegments"]), 1)
+        self.assertTrue(w["workoutSegments"][0]["workoutSteps"])
+
+    def _steps(self, w):
+        return w["workoutSegments"][0]["workoutSteps"]
+
+    def test_interval_nests_repeat_group(self):
+        w = garmin_connect.session_to_connect(
+            SessionSpec("threshold", {"reps": 3, "rep_min": 10, "rec_min": 2}))
+        groups = [s for s in self._steps(w) if s.get("type") == "RepeatGroupDTO"]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["numberOfIterations"], 3)
+        self.assertEqual(groups[0]["endCondition"]["conditionTypeKey"], "iterations")
+        self.assertEqual(len(groups[0]["workoutSteps"]), 2)  # effort + récup
+        wu = self._steps(w)[0]
+        self.assertEqual(wu["stepType"]["stepTypeKey"], "warmup")
+        # cible d'allure : bornes en m/s, low (plus lent) < high (plus rapide)
+        self.assertEqual(wu["targetType"]["workoutTargetTypeKey"], "pace.zone")
+        self.assertLess(wu["targetValueOne"], wu["targetValueTwo"])
+
+    def test_step_orders_unique_in_depth(self):
+        w = garmin_connect.session_to_connect(SessionSpec("backyard", {"loops": 4}))
+        orders = []
+
+        def walk(nodes):
+            for n in nodes:
+                orders.append(n["stepOrder"])
+                if n.get("type") == "RepeatGroupDTO":
+                    walk(n["workoutSteps"])
+
+        walk(self._steps(w))
+        self.assertEqual(len(orders), len(set(orders)))
+
+    def test_distance_step_uses_meters(self):
+        w = garmin_connect.session_to_connect(SessionSpec("backyard", {"loops": 6}))
+        group = [s for s in self._steps(w) if s.get("type") == "RepeatGroupDTO"][0]
+        conds = [c["endCondition"]["conditionTypeKey"] for c in group["workoutSteps"]]
+        self.assertIn("distance", conds)   # la boucle backyard est à distance fixe
+
+    def test_not_configured_without_env(self):
+        for k in ("GARMIN_EMAIL", "GARMIN_PASSWORD"):
+            os.environ.pop(k, None)
+        self.assertFalse(garmin_connect.is_configured())
 
 
 class TestCoach(unittest.TestCase):

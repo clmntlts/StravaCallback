@@ -1,0 +1,13 @@
+# Dépendances OPTIONNELLES du moteur. Le cœur (génération .FIT, adaptation,
+# email, dashboard, tests) fonctionne en pur stdlib SANS rien installer ici.
+#
+# Installe ces paquets seulement si tu utilises la fonctionnalité associée.
+
+# Validation des fichiers .FIT dans la suite de tests (sinon les tests FIT sont
+# simplement ignorés).
+fitdecode
+
+# Planification au calendrier Garmin Connect via la voie NON-OFFICIELLE
+# (generate.py send --push-connect / garmin-connect-login).
+# API rétro-ingénierée : peut casser si Garmin change son service.
+garminconnect

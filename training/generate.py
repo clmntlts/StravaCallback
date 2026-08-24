@@ -29,7 +29,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from engine import (adapt, coach, config, dashboard, deliver, garmin,            # noqa: E402
-                    garmin_workout, program, report, strava, workouts)
+                    garmin_connect, garmin_workout, program, report, strava,
+                    workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
@@ -151,6 +152,34 @@ def _push_garmin(res, idx):
             print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
 
 
+def _push_garmin_connect(res, idx):
+    """Upload + PLANIFIE chaque séance au calendrier Garmin Connect (voie non-off.).
+
+    C'est la planification qui fait apparaître la séance comme *séance du jour*
+    à date fixe sur la montre. Repli propre si non configuré / lib absente.
+    """
+    if not garmin_connect.is_configured():
+        print("\n[garmin-connect] non configuré (GARMIN_EMAIL / GARMIN_PASSWORD) "
+              "— planification ignorée, email/FIT conservés.")
+        return
+    try:
+        client = garmin_connect.login()
+    except Exception as e:
+        print(f"\n[garmin-connect] connexion impossible : {e}\n"
+              "                 planification ignorée, email/FIT conservés.")
+        return
+    print("\n[garmin-connect] planification au calendrier :")
+    for role in ordered_roles(res.week.sessions):
+        spec = res.week.sessions[role]
+        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
+        try:
+            wid, client = garmin_connect.push_and_schedule(
+                garmin_connect.session_to_connect(spec), d, client=client)
+            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
+        except Exception as e:
+            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+
+
 def _print_summary(res, files, outdir):
     print(f"\n=== Semaine {res.week.index} — {res.week.phase} [{res.band}] ===")
     print(res.message)
@@ -171,6 +200,8 @@ def cmd_week(args):
     _print_summary(res, files, outdir)
     if getattr(args, "push_garmin", False):
         _push_garmin(res, idx)
+    if getattr(args, "push_connect", False):
+        _push_garmin_connect(res, idx)
 
 
 def cmd_send(args):
@@ -205,6 +236,8 @@ def cmd_send(args):
 
     if getattr(args, "push_garmin", False):
         _push_garmin(res, idx)
+    if getattr(args, "push_connect", False):
+        _push_garmin_connect(res, idx)
 
 
 def cmd_library(args):
@@ -289,6 +322,26 @@ def cmd_garmin_auth_exchange(args):
         print("\n➡️  Stocke ce refresh_token en variable d'env GARMIN_REFRESH_TOKEN.")
 
 
+def cmd_garmin_connect_login(args):
+    """Login Garmin Connect (voie non-officielle) : stocke les jetons une fois.
+
+    Utile pour valider les identifiants et franchir une éventuelle MFA avant les
+    runs automatiques (qui réutiliseront les jetons du tokenstore).
+    """
+    if not garmin_connect.is_configured():
+        raise SystemExit("Définis GARMIN_EMAIL et GARMIN_PASSWORD (variables d'env).")
+    try:
+        client = garmin_connect.login()
+        name = client.get_full_name()
+    except Exception as e:
+        raise SystemExit(f"Échec du login Garmin Connect : {e}\n"
+                         "Installe la lib si besoin : pip install garminconnect")
+    store = os.path.expanduser(os.environ.get("GARMIN_TOKENSTORE", "~/.garminconnect"))
+    print(f"✓ Connecté à Garmin Connect en tant que {name}.")
+    print(f"  Jetons stockés dans {store} — les prochains runs les réutiliseront.")
+    print("  Planifie une semaine : python3 generate.py send --live --push-connect")
+
+
 def cmd_config(args):
     c = config.summary()
     print("Profil athlète (mémoire intersessions) :")
@@ -322,7 +375,9 @@ def main(argv=None):
     pw.add_argument("week", type=int, nargs="?", help="Numéro de semaine (défaut : semaine courante)")
     add_src(pw)
     pw.add_argument("--push-garmin", action="store_true",
-                    help="Planifie les séances sur Garmin si configuré (sinon ignoré)")
+                    help="Planifie via la Training API officielle si configurée (sinon ignoré)")
+    pw.add_argument("--push-connect", action="store_true",
+                    help="Planifie au calendrier Garmin Connect (voie non-officielle) si configuré")
     pw.set_defaults(func=cmd_week)
 
     ps = sub.add_parser("send", help="Pipeline hebdo complet + envoi email")
@@ -330,7 +385,9 @@ def main(argv=None):
     add_src(ps)
     ps.add_argument("--dry-run", action="store_true", help="Génère sans envoyer l'email")
     ps.add_argument("--push-garmin", action="store_true",
-                    help="Planifie les séances sur Garmin si configuré (sinon ignoré)")
+                    help="Planifie via la Training API officielle si configurée (sinon ignoré)")
+    ps.add_argument("--push-connect", action="store_true",
+                    help="Planifie au calendrier Garmin Connect (voie non-officielle) si configuré")
     ps.set_defaults(func=cmd_send)
 
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
@@ -363,6 +420,10 @@ def main(argv=None):
     pex.add_argument("--code", required=True, help="Code d'autorisation (paramètre ?code= du redirect)")
     pex.add_argument("--verifier", required=True, help="code_verifier imprimé à l'étape 1")
     pex.set_defaults(func=cmd_garmin_auth_exchange)
+
+    sub.add_parser("garmin-connect-login",
+                   help="Login Garmin Connect (voie non-officielle) : stocke les jetons"
+                   ).set_defaults(func=cmd_garmin_connect_login)
 
     args = p.parse_args(argv)
     args.func(args)
