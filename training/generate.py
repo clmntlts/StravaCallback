@@ -215,16 +215,33 @@ def cmd_library(args):
     print(f"{len(seen)} séances uniques générées dans {WORKOUTS_DIR}")
 
 
-def cmd_config(args):
-    c = config.summary()
-    print("Profil athlète effectif (athlete.json + env) :")
-    for k, v in c.items():
-        print(f"  {k:16} : {v}")
-    print(f"\n  PROGRAM_START    : {program.PROGRAM_START} (lundi de la semaine 1)")
-    print(f"  race_date        : {program.race_date()}")
-    print(f"  VOLUME_SCALE     : {program.VOLUME_SCALE}  (charge S1 = {program.planned_hours(program.week(1)):.1f} h)")
-    print(f"  jours/semaine    : {program.DAYS_PER_WEEK}  → rôles {program._ACTIVE_ROLES}")
-    print(f"  allures (min/km) : {workouts.PACES}")
+def _write_profile(updates: dict) -> str:
+    path = config.CONFIG_PATH
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    data.update({k: v for k, v in updates.items() if v is not None})
+    data["onboarded"] = True
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return path
+
+
+def cmd_onboard(args):
+    """Écrit le profil athlète (appelé après les questions d'onboarding)."""
+    path = _write_profile({
+        "objective": args.objective,
+        "race_date": args.race_date,
+        "plan_start": args.plan_start,
+        "plan_weeks": args.plan_weeks,
+        "days_per_week": args.days,
+        "start_volume_h": args.start_volume,
+        "peak_volume_h": args.peak_volume,
+    })
+    print(f"Profil écrit dans {path} (onboarded=true).")
+    print("Vérifie le plan dérivé : python3 generate.py config")
 
 
 def cmd_plan(args):
@@ -316,6 +333,16 @@ def main(argv=None):
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
     sub.add_parser("config", help="Affiche le profil athlète effectif").set_defaults(func=cmd_config)
+
+    po = sub.add_parser("onboard", help="Écrit le profil athlète (athlete.json) et marque onboarded")
+    po.add_argument("--objective")
+    po.add_argument("--race-date", dest="race_date", help="YYYY-MM-DD")
+    po.add_argument("--plan-start", dest="plan_start", help="YYYY-MM-DD")
+    po.add_argument("--plan-weeks", dest="plan_weeks", type=int)
+    po.add_argument("--days", dest="days", type=int)
+    po.add_argument("--start-volume", dest="start_volume", type=float, help="volume hebdo de départ (h)")
+    po.add_argument("--peak-volume", dest="peak_volume", type=float)
+    po.set_defaults(func=cmd_onboard)
 
     sub.add_parser("strava-auth-url",
                    help="Étape 1 auth Strava : imprime l'URL de consentement").set_defaults(func=cmd_strava_auth_url)

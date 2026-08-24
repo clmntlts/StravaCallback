@@ -37,4 +37,26 @@ echo "      python3 training/generate.py strava-auth-url"
 echo "  - Tests :"
 echo "      (cd training && python3 -m unittest discover -s tests)"
 echo "======================================================================"
+
+# Onboarding au premier démarrage : si le profil n'est pas encore personnalisé,
+# demander à l'agent de poser les questions et d'écrire athlete.json lui-même.
+ONB="$( (cd "$DIR/training" && python3 -c "from engine import config; print(1 if config.ONBOARDED else 0)") 2>/dev/null || echo 1)"
+if [ "${ONB:-1}" = "0" ]; then
+  cat <<'ONBOARD'
+
+>>> ONBOARDING REQUIS — profil athlète non personnalisé (athlete.json) <<<
+Instruction pour Claude : si cette session est INTERACTIVE (un humain peut
+répondre) ET qu'aucune tâche précise n'est déjà demandée dans ce tour, lance
+l'onboarding AVANT toute autre action :
+  1. Pose les questions à l'utilisateur (question à choix) : objectif (ex.
+     12 / 18 / 24 yards ou "dernier debout"), date de course, jours/semaine
+     (3 ou 4), et volume de course hebdo actuel (en heures).
+  2. Écris ses réponses (ne lui demande pas d'éditer un fichier) :
+       python3 training/generate.py onboard --objective "<obj>" --race-date <YYYY-MM-DD> --days <N> --start-volume <H>
+     (options possibles : --plan-start, --plan-weeks, --peak-volume)
+  3. Confirme le plan dérivé : python3 training/generate.py config
+NE PAS lancer l'onboarding dans un run automatique/planifié (aucun humain) :
+dans ce cas, exécute la tâche demandée et ignore ce bloc.
+ONBOARD
+fi
 exit 0

@@ -182,6 +182,31 @@ class TestAthleteConfig(unittest.TestCase):
                          program.TEMPLATE_WEEKS)
 
 
+class TestOnboard(unittest.TestCase):
+    def test_write_profile_sets_onboarded_and_preserves(self):
+        import json
+        import tempfile
+        import generate
+        from engine import config as cfg
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            tf.write('{"paces": {"easy": "6:00"}}')
+            path = tf.name
+        old = cfg.CONFIG_PATH
+        try:
+            cfg.CONFIG_PATH = path
+            generate._write_profile({"race_date": "2027-03-15", "days_per_week": 3,
+                                     "start_volume_h": None})
+            data = json.load(open(path))
+            self.assertTrue(data["onboarded"])
+            self.assertEqual(data["race_date"], "2027-03-15")
+            self.assertEqual(data["days_per_week"], 3)
+            self.assertNotIn("start_volume_h", data)   # None ignoré
+            self.assertIn("paces", data)               # préservé
+        finally:
+            cfg.CONFIG_PATH = old
+            os.unlink(path)
+
+
 class TestGarminConfig(unittest.TestCase):
     def test_not_configured_without_env(self):
         for k in ("GARMIN_CONSUMER_KEY", "GARMIN_CONSUMER_SECRET", "GARMIN_REFRESH_TOKEN"):

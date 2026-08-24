@@ -1,5 +1,7 @@
 {
-  "_comment": "Profil athlète = mémoire intersessions du moteur. Édité ici, il pilote tout le plan. Toute session (y compris la Routine hebdo) le lit depuis le repo.",
+  "_comment": "Profil athlète = mémoire intersessions du moteur. Rempli automatiquement au 1er démarrage (Claude pose les questions), il pilote tout le plan. Toute session le lit depuis le repo.",
+
+  "onboarded": false,
 
   "objective": "18-24 yards",
   "race_date": "2027-04-24",

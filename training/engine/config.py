@@ -19,6 +19,7 @@ _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # training/
 CONFIG_PATH = os.environ.get("ATHLETE_CONFIG", os.path.join(_HERE, "athlete.json"))
 
 _DEFAULTS = {
+    "onboarded": False,
     "objective": "18-24 yards",
     "race_date": None,
     "plan_start": None,
@@ -76,6 +77,7 @@ def _parse_int(v) -> Optional[int]:
         return None
 
 
+ONBOARDED: bool = bool(_cfg["onboarded"])
 OBJECTIVE: str = _cfg["objective"]
 RACE_DATE: Optional[date] = _parse_date(_cfg["race_date"])
 PLAN_START: Optional[date] = _parse_date(_cfg["plan_start"])

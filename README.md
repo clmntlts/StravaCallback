@@ -88,6 +88,13 @@ Claude : il prépare l'environnement (parseur `.FIT` pour les tests) et affiche 
 et les prochaines actions. Aucune configuration n'est nécessaire ; le hook
 s'exécute automatiquement.
 
+**Onboarding au premier démarrage** : tant que le profil n'a pas été personnalisé
+(`"onboarded": false`), le hook demande à l'assistant de **poser quelques questions**
+(objectif, date de course, jours par semaine, volume hebdo actuel) puis d'écrire
+lui-même `athlete.json` via `generate.py onboard` — **aucun fichier à éditer à la
+main**. L'onboarding ne se déclenche qu'en session interactive, jamais dans un run
+automatique planifié.
+
 ### Obtenir un token Strava (une fois, sans service externe)
 
 ```bash
