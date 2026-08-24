@@ -15,16 +15,8 @@ import os
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
-from .models import PlannedWeek, SessionSpec
-from . import workouts
-
-# Lundi de la SEMAINE 1 du programme. Override possible via env PROGRAM_START.
-PROGRAM_START = date(2026, 8, 31)
-_env_start = os.environ.get("PROGRAM_START")
-if _env_start:
-    PROGRAM_START = datetime.strptime(_env_start, "%Y-%m-%d").date()
-# Toujours ancrer sur un lundi (cohérence des semaines calendaires lun-dim).
-PROGRAM_START = PROGRAM_START - timedelta(days=PROGRAM_START.weekday())
+from .models import ROLES, PlannedWeek, SessionSpec
+from . import adapt, config, workouts
 
 
 def S(template: str, **params) -> SessionSpec:
@@ -94,18 +86,76 @@ _ROWS = [
 ]
 
 
-def _week(row) -> PlannedWeek:
+N_WEEKS = len(_ROWS)
+
+# --------------------------------------------------------------------------- #
+# Paramétrage par le profil athlète (config) → mémoire intersessions
+# --------------------------------------------------------------------------- #
+# Jours/semaine : à 3 jours on retire le "facile" du jeudi (on garde qualité +
+# week-end longue/back-to-back, le plus spécifique). 4+ : les 4 rôles.
+def _roles_for_days(days: int) -> List[str]:
+    if days <= 3:
+        return [r for r in ROLES if r != "easy"]
+    return list(ROLES)
+
+
+DAYS_PER_WEEK = config.DAYS_PER_WEEK
+_ACTIVE_ROLES = _roles_for_days(DAYS_PER_WEEK)
+
+
+def _base_row_sessions(row):
     idx, phase, deload, note, q, e, lg, bb = row
-    sessions: Dict[str, SessionSpec] = {"quality": q, "easy": e}
+    s: Dict[str, SessionSpec] = {"quality": q, "easy": e}
     if lg is not None:
-        sessions["long"] = lg
+        s["long"] = lg
     if bb is not None:
-        sessions["b2b"] = bb
+        s["b2b"] = bb
+    return {r: spec for r, spec in s.items() if r in _ACTIVE_ROLES}
+
+
+def _base_week1_hours() -> float:
+    s = _base_row_sessions(_ROWS[0])
+    return sum(workouts.minutes(spec) for spec in s.values()) / 60.0
+
+
+# Échelle de volume : cale la charge de la semaine 1 sur le volume de départ réel
+# de l'athlète (start_volume_h). Le reste du plan monte proportionnellement.
+VOLUME_SCALE = 1.0
+if config.START_VOLUME_H:
+    base = _base_week1_hours()
+    if base > 0:
+        VOLUME_SCALE = round(config.START_VOLUME_H / base, 3)
+
+
+def _build_week(row, scale: float = None, days: int = None) -> PlannedWeek:
+    idx, phase, deload, note = row[0], row[1], row[2], row[3]
+    roles = _roles_for_days(days) if days is not None else _ACTIVE_ROLES
+    sc = VOLUME_SCALE if scale is None else scale
+    sessions = {r: spec for r, spec in _base_row_sessions(row).items() if r in roles}
+    if sc != 1.0:
+        sessions = {r: adapt._scaled_spec(spec, sc) for r, spec in sessions.items()}
     return PlannedWeek(idx, phase, deload, note, sessions)
 
 
-PROGRAM: List[PlannedWeek] = [_week(r) for r in _ROWS]
-N_WEEKS = len(PROGRAM)
+PROGRAM: List[PlannedWeek] = [_build_week(r) for r in _ROWS]
+
+
+# Lundi de la SEMAINE 1 : dérivé de la date de course (config), sinon env/défaut.
+def _compute_start() -> date:
+    if config.RACE_DATE:
+        race_monday = config.RACE_DATE - timedelta(days=config.RACE_DATE.weekday())
+        return race_monday - timedelta(days=7 * (N_WEEKS - 1))
+    d = date(2026, 8, 31)
+    env = os.environ.get("PROGRAM_START")
+    if env:
+        try:
+            d = datetime.strptime(env, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return d - timedelta(days=d.weekday())  # ancrer sur un lundi
+
+
+PROGRAM_START = _compute_start()
 
 
 def week(index: int) -> PlannedWeek:
@@ -113,6 +163,11 @@ def week(index: int) -> PlannedWeek:
     if not (1 <= index <= N_WEEKS):
         raise IndexError(f"Semaine {index} hors programme (1..{N_WEEKS})")
     return PROGRAM[index - 1].copy()
+
+
+def build_week_scaled(index: int, scale: float, days: int = None) -> PlannedWeek:
+    """Semaine reconstruite avec une échelle de volume explicite (tests/simulation)."""
+    return _build_week(_ROWS[index - 1], scale=scale, days=days)
 
 
 def planned_minutes(w: PlannedWeek) -> float:

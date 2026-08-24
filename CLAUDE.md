@@ -28,3 +28,7 @@ Règles :
 - Sans dépendances externes (stdlib) ; `fitdecode` seulement pour valider les FIT.
 - Ne pas éditer les `.fit` à la main : régénérer via `python3 training/generate.py library`.
 - Source unique de la structure : `training/engine/program.py`.
+- **Paramètres & mémoire intersessions** : `training/athlete.json` (objectif, date de
+  course, jours/sem, volume, allures) est lu par toute session, y compris la Routine
+  hebdo. C'est LA mémoire durable du moteur — versionnée dans le repo. Voir
+  `python3 training/generate.py config`.

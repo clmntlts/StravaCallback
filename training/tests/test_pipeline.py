@@ -149,6 +149,26 @@ class TestCoach(unittest.TestCase):
         self.assertTrue(any("aérobie" in t for t in a.trends))
 
 
+class TestAthleteConfig(unittest.TestCase):
+    def test_volume_scale_reduces_hours(self):
+        full = program.planned_hours(program.week(9))
+        half = program.planned_hours(program.build_week_scaled(9, 0.5))
+        self.assertLess(half, full)
+        self.assertGreater(half, 0)
+
+    def test_three_days_drops_easy(self):
+        self.assertNotIn("easy", program._roles_for_days(3))
+        self.assertIn("easy", program._roles_for_days(4))
+        w3 = program.build_week_scaled(9, 1.0, days=3)
+        self.assertNotIn("easy", w3.sessions)
+        self.assertIn("long", w3.sessions)
+
+    def test_race_date_drives_start(self):
+        # avec la date par défaut du profil, la semaine 34 se termine à la course
+        self.assertEqual(program.week_start(program.N_WEEKS).weekday(), 0)  # lundi
+        self.assertGreaterEqual((program.race_date() - program.week_start(program.N_WEEKS)).days, 0)
+
+
 class TestGarminConfig(unittest.TestCase):
     def test_not_configured_without_env(self):
         for k in ("GARMIN_CONSUMER_KEY", "GARMIN_CONSUMER_SECRET", "GARMIN_REFRESH_TOKEN"):

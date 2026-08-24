@@ -28,8 +28,8 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from engine import (adapt, coach, dashboard, deliver, garmin, garmin_workout,    # noqa: E402
-                    program, report, strava, workouts)
+from engine import (adapt, coach, config, dashboard, deliver, garmin,            # noqa: E402
+                    garmin_workout, program, report, strava, workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
@@ -215,6 +215,18 @@ def cmd_library(args):
     print(f"{len(seen)} séances uniques générées dans {WORKOUTS_DIR}")
 
 
+def cmd_config(args):
+    c = config.summary()
+    print("Profil athlète effectif (athlete.json + env) :")
+    for k, v in c.items():
+        print(f"  {k:16} : {v}")
+    print(f"\n  PROGRAM_START    : {program.PROGRAM_START} (lundi de la semaine 1)")
+    print(f"  race_date        : {program.race_date()}")
+    print(f"  VOLUME_SCALE     : {program.VOLUME_SCALE}  (charge S1 = {program.planned_hours(program.week(1)):.1f} h)")
+    print(f"  jours/semaine    : {program.DAYS_PER_WEEK}  → rôles {program._ACTIVE_ROLES}")
+    print(f"  allures (min/km) : {workouts.PACES}")
+
+
 def cmd_plan(args):
     with open(os.path.join(HERE, "plan.md"), "w", encoding="utf-8") as f:
         f.write(report.plan_md())
@@ -238,6 +250,23 @@ def cmd_garmin_auth_exchange(args):
     print(json.dumps(tokens, ensure_ascii=False, indent=2))
     if "refresh_token" in tokens:
         print("\n➡️  Stocke ce refresh_token en variable d'env GARMIN_REFRESH_TOKEN.")
+
+
+def cmd_config(args):
+    c = config.summary()
+    print("Profil athlète (mémoire intersessions) :")
+    for k in ("objective", "race_date", "days_per_week", "start_volume_h",
+              "peak_volume_h"):
+        print(f"  {k:16} {c[k]}")
+    print(f"  {'paces surchargées':16} {', '.join(c['paces_overridden']) or '(aucune)'}")
+    print(f"  {'fichier':16} {c['config_path']}")
+    print("\nDérivé :")
+    print(f"  semaine 1 (lundi)   {program.PROGRAM_START}")
+    print(f"  jour de course      {program.race_date()}  (J-{program.days_to_race()})")
+    print(f"  échelle de volume   ×{program.VOLUME_SCALE}")
+    print(f"  rôles actifs        {', '.join(program._ACTIVE_ROLES)}")
+    print(f"  volume semaine 1    {program.planned_hours(program.week(1)):.1f} h "
+          f"→ pic {max(program.planned_hours(w) for w in program.PROGRAM):.1f} h")
 
 
 def main(argv=None):
@@ -267,6 +296,7 @@ def main(argv=None):
 
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
+    sub.add_parser("config", help="Affiche le profil athlète effectif").set_defaults(func=cmd_config)
 
     pau = sub.add_parser("garmin-auth-url",
                          help="Étape 1 auth Garmin : imprime l'URL de consentement + le verifier")

@@ -41,6 +41,38 @@ python3 generate.py send --activities tests/fixtures/last_week_sample.json \
 python3 generate.py send --live --push-garmin
 ```
 
+## Profil athlète = mémoire intersessions (`athlete.json`)
+
+Tout le plan est **paramétré par un seul fichier committé**, `athlete.json`.
+Comme il est dans le repo, **toute session le lit** (y compris la Routine hebdo
+éphémère) : c'est la mémoire durable du moteur, versionnée et auditable.
+
+```jsonc
+{
+  "objective": "18-24 yards",   // objectif (informe le pic)
+  "race_date": "2027-04-24",    // → cale la semaine 1 pour finir le jour J
+  "days_per_week": 4,           // 3 → retire le "facile" ; 4 → les 4 rôles
+  "start_volume_h": null,       // volume hebdo de départ → échelle tout le plan
+  "peak_volume_h": null,        // (réservé)
+  "paces": { "easy": "6:15", ... }  // allures cibles des .FIT
+}
+```
+
+Effet (voir `python3 generate.py config`) :
+- **`race_date`** → `PROGRAM_START` = la semaine 34 tombe la semaine de course.
+- **`start_volume_h`** → **échelle de volume** : la semaine 1 colle à ton volume
+  réel, le reste du plan monte proportionnellement.
+- **`days_per_week`** → jeu de séances (3 j = qualité + longue + back-to-back).
+- **`paces`** → cibles d'allure des séances.
+
+Précédence : **variables d'env** (`RACE_DATE`, `DAYS_PER_WEEK`, `START_VOLUME_H`,
+`PROGRAM_START`) > `athlete.json` > défauts. Édite le fichier, commite, et la
+prochaine génération (ou la Routine) en tient compte.
+
+```bash
+python3 generate.py config          # affiche le profil effectif + dérivés
+```
+
 ## Automatisation hebdomadaire (Claude = le moteur)
 
 Chaque **dimanche ~18h (Europe/Paris)**, une Routine Claude planifiée réveille une
@@ -104,9 +136,11 @@ et calcule volume / D+ / plus longue sortie / ACWR.
 ```
 training/
   generate.py         # CLI (week / library / plan)
+  athlete.json        # profil athlète = mémoire intersessions (objectif, date, volume, allures)
   engine/
+    config.py         # chargement du profil athlète (+ overrides env)
     models.py         # types (SessionSpec, PlannedWeek, WeekSummary, Adjustment)
-    program.py        # programme 34 semaines + ancrage calendaire (source unique)
+    program.py        # programme 34 semaines, paramétré par la config (source unique)
     workouts.py       # templates de séances paramétrables + allures
     adapt.py          # moteur adaptatif (garde-fous)
     strava.py         # client Strava + synthèse hebdo + agrégation par semaine

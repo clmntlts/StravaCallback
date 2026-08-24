@@ -23,9 +23,11 @@ from .fit_encoder import (
     Workout,
 )
 from .models import SessionSpec
+from . import config
 
 # --------------------------------------------------------------------------- #
-# Allures de référence (min/km). Éditables — recalibrées via Strava.
+# Allures de référence (min/km). Défauts surchargés par le profil athlète
+# (athlete.json → engine/config.py), puis recalibrables via Strava.
 # --------------------------------------------------------------------------- #
 PACES = {
     "recovery": "6:45",
@@ -36,6 +38,7 @@ PACES = {
     "tempo": "5:00",
     "cruise": "4:55",
 }
+PACES.update(config.PACES)
 
 
 def _pace_seconds(pace: str) -> int:
