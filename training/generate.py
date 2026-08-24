@@ -255,12 +255,14 @@ def cmd_garmin_auth_exchange(args):
 def cmd_config(args):
     c = config.summary()
     print("Profil athlète (mémoire intersessions) :")
-    for k in ("objective", "race_date", "days_per_week", "start_volume_h",
-              "peak_volume_h"):
+    for k in ("objective", "race_date", "plan_start", "plan_weeks",
+              "days_per_week", "start_volume_h", "peak_volume_h"):
         print(f"  {k:16} {c[k]}")
     print(f"  {'paces surchargées':16} {', '.join(c['paces_overridden']) or '(aucune)'}")
     print(f"  {'fichier':16} {c['config_path']}")
     print("\nDérivé :")
+    print(f"  durée du plan       {program.N_WEEKS} semaines "
+          f"(template {program.TEMPLATE_WEEKS})")
     print(f"  semaine 1 (lundi)   {program.PROGRAM_START}")
     print(f"  jour de course      {program.race_date()}  (J-{program.days_to_race()})")
     print(f"  échelle de volume   ×{program.VOLUME_SCALE}")

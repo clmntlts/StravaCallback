@@ -4,6 +4,9 @@
   "objective": "18-24 yards",
   "race_date": "2027-04-24",
 
+  "plan_start": null,
+  "plan_weeks": null,
+
   "days_per_week": 4,
 
   "start_volume_h": null,

@@ -168,6 +168,19 @@ class TestAthleteConfig(unittest.TestCase):
         self.assertEqual(program.week_start(program.N_WEEKS).weekday(), 0)  # lundi
         self.assertGreaterEqual((program.race_date() - program.week_start(program.N_WEEKS)).days, 0)
 
+    def test_compression_keeps_shape(self):
+        phases = {"Fondation", "Force-endurance", "Spécifique", "Pic", "Affûtage"}
+        for N in (10, 16, 20, 28):
+            sel = program._select(program._ROWS, N)
+            self.assertEqual(len(sel), N)
+            self.assertEqual([r[0] for r in sel], list(range(1, N + 1)))  # ré-indexé
+            self.assertEqual({r[1] for r in sel}, phases)                 # toutes les phases
+            self.assertEqual([r[1] for r in sel[-3:]], ["Affûtage"] * 3)  # taper intact
+
+    def test_compression_noop_when_full(self):
+        self.assertEqual(len(program._select(program._ROWS, program.TEMPLATE_WEEKS)),
+                         program.TEMPLATE_WEEKS)
+
 
 class TestGarminConfig(unittest.TestCase):
     def test_not_configured_without_env(self):

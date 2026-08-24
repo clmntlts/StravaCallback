@@ -86,7 +86,94 @@ _ROWS = [
 ]
 
 
-N_WEEKS = len(_ROWS)
+TEMPLATE_WEEKS = len(_ROWS)
+MIN_WEEKS = 4
+
+
+def _monday(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+# --------------------------------------------------------------------------- #
+# Durée de plan variable : compresse le template de 34 semaines pour tenir dans
+# le temps réellement disponible (plan_start→race_date, ou plan_weeks). On garde
+# la forme : affûtage intact, chaque phase représentée (min. renforcé pour
+# Spécifique/Pic), sélection régulière à l'intérieur de chaque phase.
+# --------------------------------------------------------------------------- #
+def _allocate(budget, sizes, mins):
+    alloc = [min(m, s) for m, s in zip(mins, sizes)]
+    total = sum(sizes) or 1
+    quotas = [budget * s / total for s in sizes]
+    for i in range(len(sizes)):
+        alloc[i] = min(sizes[i], max(alloc[i], int(quotas[i])))
+    order = sorted(range(len(sizes)), key=lambda i: quotas[i] - int(quotas[i]), reverse=True)
+    j = 0
+    while sum(alloc) < budget and any(alloc[i] < sizes[i] for i in range(len(sizes))):
+        i = order[j % len(order)]
+        if alloc[i] < sizes[i]:
+            alloc[i] += 1
+        j += 1
+    while sum(alloc) > budget:  # sécurité : ne dépasse pas le budget
+        for i in order[::-1]:
+            if alloc[i] > mins[i] and sum(alloc) > budget:
+                alloc[i] -= 1
+    return alloc
+
+
+def _even(rows, k):
+    n = len(rows)
+    if k <= 0:
+        return []
+    if k >= n:
+        return list(rows)
+    if k == 1:
+        return [rows[-1]]  # garde la semaine "pic" de la phase
+    idxs = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)})
+    i = 0
+    while len(idxs) < k and i < n:
+        if i not in idxs:
+            idxs.append(i)
+        i += 1
+    return [rows[i] for i in sorted(idxs)[:k]]
+
+
+def _select(rows, N):
+    if N >= len(rows):
+        return list(rows)
+    groups = []
+    for r in rows:
+        if not groups or groups[-1][0] != r[1]:
+            groups.append((r[1], [r]))
+        else:
+            groups[-1][1].append(r)
+    *others, taper = groups
+    taper_rows = taper[1]
+    budget = N - len(taper_rows)
+    if budget < len(others):            # trop court : garder les N dernières semaines
+        kept = list(rows)[-N:]
+    else:
+        sizes = [len(g[1]) for g in others]
+        mins = [2 if g[0] in ("Spécifique", "Pic") else 1 for g in others]
+        alloc = _allocate(budget, sizes, mins)
+        kept = []
+        for (ph, rws), k in zip(others, alloc):
+            kept += _even(rws, k)
+        kept += taper_rows
+    return [(i,) + tuple(r[1:]) for i, r in enumerate(kept, start=1)]  # ré-indexe 1..N
+
+
+def _target_weeks() -> int:
+    if config.PLAN_WEEKS:
+        return max(MIN_WEEKS, min(TEMPLATE_WEEKS, config.PLAN_WEEKS))
+    if config.PLAN_START and config.RACE_DATE:
+        w = (_monday(config.RACE_DATE) - _monday(config.PLAN_START)).days // 7 + 1
+        return max(MIN_WEEKS, min(TEMPLATE_WEEKS, w))
+    return TEMPLATE_WEEKS
+
+
+_ACTIVE_ROWS = _select(_ROWS, _target_weeks())
+N_WEEKS = len(_ACTIVE_ROWS)
+
 
 # --------------------------------------------------------------------------- #
 # Paramétrage par le profil athlète (config) → mémoire intersessions
@@ -114,7 +201,7 @@ def _base_row_sessions(row):
 
 
 def _base_week1_hours() -> float:
-    s = _base_row_sessions(_ROWS[0])
+    s = _base_row_sessions(_ACTIVE_ROWS[0])
     return sum(workouts.minutes(spec) for spec in s.values()) / 60.0
 
 
@@ -137,14 +224,16 @@ def _build_week(row, scale: float = None, days: int = None) -> PlannedWeek:
     return PlannedWeek(idx, phase, deload, note, sessions)
 
 
-PROGRAM: List[PlannedWeek] = [_build_week(r) for r in _ROWS]
+PROGRAM: List[PlannedWeek] = [_build_week(r) for r in _ACTIVE_ROWS]
 
 
-# Lundi de la SEMAINE 1 : dérivé de la date de course (config), sinon env/défaut.
+# Lundi de la SEMAINE 1 : plan_start explicite, sinon calé pour finir à la course,
+# sinon env/défaut.
 def _compute_start() -> date:
+    if config.PLAN_START:
+        return _monday(config.PLAN_START)
     if config.RACE_DATE:
-        race_monday = config.RACE_DATE - timedelta(days=config.RACE_DATE.weekday())
-        return race_monday - timedelta(days=7 * (N_WEEKS - 1))
+        return _monday(config.RACE_DATE) - timedelta(days=7 * (N_WEEKS - 1))
     d = date(2026, 8, 31)
     env = os.environ.get("PROGRAM_START")
     if env:
@@ -152,7 +241,7 @@ def _compute_start() -> date:
             d = datetime.strptime(env, "%Y-%m-%d").date()
         except ValueError:
             pass
-    return d - timedelta(days=d.weekday())  # ancrer sur un lundi
+    return _monday(d)
 
 
 PROGRAM_START = _compute_start()
@@ -167,7 +256,7 @@ def week(index: int) -> PlannedWeek:
 
 def build_week_scaled(index: int, scale: float, days: int = None) -> PlannedWeek:
     """Semaine reconstruite avec une échelle de volume explicite (tests/simulation)."""
-    return _build_week(_ROWS[index - 1], scale=scale, days=days)
+    return _build_week(_ACTIVE_ROWS[index - 1], scale=scale, days=days)
 
 
 def planned_minutes(w: PlannedWeek) -> float:

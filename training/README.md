@@ -51,6 +51,8 @@ Comme il est dans le repo, **toute session le lit** (y compris la Routine hebdo
 {
   "objective": "18-24 yards",   // objectif (informe le pic)
   "race_date": "2027-04-24",    // → cale la semaine 1 pour finir le jour J
+  "plan_start": null,           // date de début → durée du plan = start→course
+  "plan_weeks": null,           // ou fixe directement le nombre de semaines
   "days_per_week": 4,           // 3 → retire le "facile" ; 4 → les 4 rôles
   "start_volume_h": null,       // volume hebdo de départ → échelle tout le plan
   "peak_volume_h": null,        // (réservé)
