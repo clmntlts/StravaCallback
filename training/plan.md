@@ -1,4 +1,4 @@
-# Plan Backyard Ultra — 34 semaines (Sept. → Avril)
+# Plan Backyard Ultra — 34 semaines
 
 Objectif : **18-24 yards** · 4 jours/semaine · Mar. (qualité) · Jeu. (facile) · Sam. (longue) · Dim. (B2B).
 

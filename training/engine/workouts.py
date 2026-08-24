@@ -253,13 +253,23 @@ def _runwalk(p):
             .build())
 
 
+BACKYARD_KM = 6.706  # distance d'une boucle backyard (4.167 miles)
+
+
+def _backyard_loop_min(km: float) -> float:
+    """Temps estimé d'une boucle à l'allure yard."""
+    return km * _pace_seconds(PACES["yard"]) / 60.0
+
+
 def _backyard(p):
     loops = int(p["loops"])
-    run_min = p.get("run_min", 50)
-    rest_min = p.get("rest_min", 10)
+    km = p.get("km", BACKYARD_KM)
+    # Fidèle à la discipline "à l'heure pile" : boucle à DISTANCE fixe, puis repos
+    # = ce qu'il reste avant l'heure suivante (60' − temps de boucle).
+    rest_min = max(4, round(60 - _backyard_loop_min(km)))
     return (Builder(f"Simu Backyard {loops} boucles")
             .repeat(loops, lambda b: (
-                b.run_time(run_min, "yard", "Boucle (~6.7km)", 45, 25),
+                b.run_dist(km, "yard", "Boucle (6,7 km)", 45, 25),
                 b.easy_time(rest_min, "Repos + ravito", Intensity.REST)))
             .build())
 
@@ -305,7 +315,7 @@ TEMPLATES: Dict[str, Template] = {
                           lambda p: p["hours"] * 60),
     "backyard":  Template("backyard", _backyard,
                           lambda p: f"Simu Backyard {int(p['loops'])} boucles",
-                          lambda p: p["loops"] * (p.get("run_min", 50) + p.get("rest_min", 10))),
+                          lambda p: p["loops"] * 60.0),  # 1 boucle "à l'heure pile" ≈ 60'
 }
 
 

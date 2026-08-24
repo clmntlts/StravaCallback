@@ -137,6 +137,28 @@ def _even(rows, k):
     return [rows[i] for i in sorted(idxs)[:k]]
 
 
+def _reindex(kept):
+    return [(i,) + tuple(r[1:]) for i, r in enumerate(kept, start=1)]
+
+
+def _reflag_deloads(rows, taper_len):
+    """Impose un rythme 3:1 par POSITION dans le plan compressé (pas hérité des
+    semaines du template) : toute 4ᵉ semaine hors affûtage, jamais consécutives.
+    Les semaines ainsi marquées seront allégées à la construction."""
+    n = len(rows)
+    out, last = [], -10
+    for i, r in enumerate(rows):
+        idx = i + 1
+        in_taper = idx > n - taper_len
+        note = r[3].replace(" (décharge)", "")
+        deload = (not in_taper) and idx % 4 == 0 and (idx - last) >= 3 and idx < n
+        if deload:
+            last = idx
+            note = note + " (décharge)"
+        out.append((r[0], r[1], deload, note) + tuple(r[4:]))
+    return out
+
+
 def _select(rows, N):
     if N >= len(rows):
         return list(rows)
@@ -147,32 +169,46 @@ def _select(rows, N):
         else:
             groups[-1][1].append(r)
     *others, taper = groups
-    taper_rows = taper[1]
+    taper_len = 3 if N >= 14 else 2                 # affûtage plus court en plan court
+    taper_rows = taper[1][-taper_len:]
     budget = N - len(taper_rows)
-    if budget < len(others):            # trop court : garder les N dernières semaines
+    mins = [2 if g[0] in ("Spécifique", "Pic") else 1 for g in others]
+    if budget < sum(mins):              # trop court : garder les N dernières semaines
         kept = list(rows)[-N:]
     else:
         sizes = [len(g[1]) for g in others]
-        mins = [2 if g[0] in ("Spécifique", "Pic") else 1 for g in others]
         alloc = _allocate(budget, sizes, mins)
         kept = []
         for (ph, rws), k in zip(others, alloc):
-            kept += _even(rws, k)
+            builds = [r for r in rws if not r[2]]   # préfère les semaines "build"
+            kept += _even(builds if len(builds) >= k else rws, k)
         kept += taper_rows
-    return [(i,) + tuple(r[1:]) for i, r in enumerate(kept, start=1)]  # ré-indexe 1..N
+    return _reflag_deloads(_reindex(kept), taper_len)  # rythme 3:1 par position
+
+
+def _valid_plan_start() -> Optional[date]:
+    """plan_start seulement s'il est cohérent (avant la course)."""
+    if not config.PLAN_START:
+        return None
+    if config.RACE_DATE and _monday(config.PLAN_START) >= _monday(config.RACE_DATE):
+        return None  # date de début après la course → ignorée
+    return config.PLAN_START
 
 
 def _target_weeks() -> int:
     if config.PLAN_WEEKS:
         return max(MIN_WEEKS, min(TEMPLATE_WEEKS, config.PLAN_WEEKS))
-    if config.PLAN_START and config.RACE_DATE:
-        w = (_monday(config.RACE_DATE) - _monday(config.PLAN_START)).days // 7 + 1
+    ps = _valid_plan_start()
+    if ps and config.RACE_DATE:
+        w = (_monday(config.RACE_DATE) - _monday(ps)).days // 7 + 1
         return max(MIN_WEEKS, min(TEMPLATE_WEEKS, w))
     return TEMPLATE_WEEKS
 
 
 _ACTIVE_ROWS = _select(_ROWS, _target_weeks())
 N_WEEKS = len(_ACTIVE_ROWS)
+COMPRESSED = N_WEEKS < TEMPLATE_WEEKS   # plan raccourci → décharges re-placées à alléger
+DELOAD_SCALE = 0.6                      # allègement d'une semaine de décharge re-placée
 
 
 # --------------------------------------------------------------------------- #
@@ -218,20 +254,63 @@ def _build_week(row, scale: float = None, days: int = None) -> PlannedWeek:
     idx, phase, deload, note = row[0], row[1], row[2], row[3]
     roles = _roles_for_days(days) if days is not None else _ACTIVE_ROLES
     sc = VOLUME_SCALE if scale is None else scale
+    # En plan compressé, les décharges sont re-placées par position et portent des
+    # séances "build" → on les allège réellement.
+    if COMPRESSED and deload:
+        sc *= DELOAD_SCALE
     sessions = {r: spec for r, spec in _base_row_sessions(row).items() if r in roles}
     if sc != 1.0:
         sessions = {r: adapt._scaled_spec(spec, sc) for r, spec in sessions.items()}
     return PlannedWeek(idx, phase, deload, note, sessions)
 
 
+def _hours(w) -> float:
+    return sum(workouts.minutes(s) for s in w.sessions.values()) / 60.0
+
+
+def _rescale_week(w, f):
+    w.sessions = {r: adapt._scaled_spec(s, f) for r, s in w.sessions.items()}
+
+
+def _smooth_volume(weeks):
+    """Plafonne la hausse de volume hebdo total (anti-saut de charge). Un rebond
+    plus large est toléré au sortir d'une décharge. Appliqué aux plans compressés,
+    où le rééchantillonnage peut créer des sauts ; le plan complet garde ses gros
+    blocs volontaires (post-décharge)."""
+    prev_h, prev_deload = None, False
+    for w in weeks:
+        h = _hours(w)
+        if prev_h and prev_h > 0 and not w.deload:
+            cap = 1.8 if prev_deload else 1.4
+            if h > prev_h * cap:
+                _rescale_week(w, (prev_h * cap) / h)
+                h = _hours(w)
+        prev_h, prev_deload = h, w.deload
+    return weeks
+
+
+def _cap_peak(weeks, peak_h):
+    """Plafond dur de volume hebdo (peak_volume_h du profil)."""
+    for w in weeks:
+        h = _hours(w)
+        if h > peak_h > 0:
+            _rescale_week(w, peak_h / h)
+    return weeks
+
+
 PROGRAM: List[PlannedWeek] = [_build_week(r) for r in _ACTIVE_ROWS]
+if COMPRESSED:
+    PROGRAM = _smooth_volume(PROGRAM)
+if config.PEAK_VOLUME_H:
+    PROGRAM = _cap_peak(PROGRAM, config.PEAK_VOLUME_H)
 
 
 # Lundi de la SEMAINE 1 : plan_start explicite, sinon calé pour finir à la course,
 # sinon env/défaut.
 def _compute_start() -> date:
-    if config.PLAN_START:
-        return _monday(config.PLAN_START)
+    ps = _valid_plan_start()
+    if ps:
+        return _monday(ps)
     if config.RACE_DATE:
         return _monday(config.RACE_DATE) - timedelta(days=7 * (N_WEEKS - 1))
     d = date(2026, 8, 31)
@@ -305,7 +384,9 @@ def target_week_index(today: Optional[date] = None) -> int:
 
 
 def race_date() -> date:
-    """Jour de course = fin de la semaine 34 (samedi = start + 5 j)."""
+    """Jour de course : la vraie date du profil si fournie, sinon fin du plan."""
+    if config.RACE_DATE:
+        return config.RACE_DATE
     return week_start(N_WEEKS) + timedelta(days=5)
 
 

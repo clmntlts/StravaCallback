@@ -123,8 +123,9 @@ def week_report_json(res: AdaptResult, last: WeekSummary, files: dict, analysis=
 # Plan complet (markdown) depuis le programme
 # --------------------------------------------------------------------------- #
 def plan_md() -> str:
-    L = ["# Plan Backyard Ultra — 34 semaines (Sept. → Avril)\n"]
-    L.append("Objectif : **18-24 yards** · 4 jours/semaine · "
+    from . import config
+    L = [f"# Plan Backyard Ultra — {program.N_WEEKS} semaines\n"]
+    L.append(f"Objectif : **{config.OBJECTIVE}** · {config.DAYS_PER_WEEK} jours/semaine · "
              "Mar. (qualité) · Jeu. (facile) · Sam. (longue) · Dim. (B2B).\n")
     L.append("> Programme macro (la « ligne de conduite »). Chaque semaine est "
              "ensuite **ajustée** au réalisé de la semaine précédente via "

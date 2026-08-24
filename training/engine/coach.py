@@ -62,10 +62,17 @@ def _ef(a: Activity) -> Optional[float]:
     return None
 
 
+FLAT_DPLUS_PER_KM = 8.0  # au-delà, l'EF chute mécaniquement (terrain vallonné)
+
+
+def _is_flat(a: Activity) -> bool:
+    return a.distance_m > 0 and (a.elevation_m / (a.distance_m / 1000.0)) < FLAT_DPLUS_PER_KM
+
+
 def _week_ef(runs: List[Activity], steady_s: float) -> Optional[float]:
-    """EF médian sur les sorties aérobies (allure plus lente que soutenue)."""
+    """EF médian sur les sorties aérobies ET PLATES (comparaison valide)."""
     efs = [_ef(a) for a in runs
-           if (_pace_s(a) or 0) > steady_s and _ef(a) is not None]
+           if (_pace_s(a) or 0) > steady_s and _is_flat(a) and _ef(a) is not None]
     efs = [e for e in efs if e]
     return st.median(efs) if efs else None
 
@@ -132,10 +139,16 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
     # --- Distribution d'intensité + régularité d'allure ------------------ #
     paces = [(a, _pace_s(a)) for a in week_runs]
     with_pace = [(a, p) for a, p in paces if p]
-    fast_share = 0.0
+    fast_share = fast_share_excl = 0.0
     if with_pace:
         fast_km = sum(a.distance_m / 1000 for a, p in with_pace if p < steady_s)
         fast_share = fast_km / total_km if total_km else 0
+        # exclut la séance qualité présumée (la sortie la plus rapide) du diagnostic
+        # "trop vite" : une séance de seuil programmée ne doit pas déclencher l'alerte.
+        fastest = min(with_pace, key=lambda ap: ap[1])[0]
+        fast_km_excl = sum(a.distance_m / 1000 for a, p in with_pace
+                           if p < steady_s and a is not fastest)
+        fast_share_excl = fast_km_excl / total_km if total_km else 0
         if fast_share > 0.35:
             obs.append(f"Intensité : {fast_share:.0%} du kilométrage plus rapide que "
                        f"l'allure soutenue ({_pace_str(steady_s)}).")
@@ -197,10 +210,10 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
         if ef_now is not None and len(hist_ef) >= 1:
             base = st.mean(hist_ef)
             chg = (ef_now - base) / base if base else 0
-            if chg > 0.03:
+            if chg > 0.05:
                 trends.append(f"Efficacité aérobie en HAUSSE ({chg:+.0%}) : à FC égale, "
                               f"tu cours plus vite. La forme monte. 💪")
-            elif chg < -0.03:
+            elif chg < -0.05:
                 trends.append(f"Efficacité aérobie en BAISSE ({chg:+.0%}) : fatigue, "
                               f"chaleur ou manque de fraîcheur possibles.")
                 rec.append("EF en baisse : privilégie la récup et l'endurance facile "
@@ -213,7 +226,7 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
     if summary.acwr is not None and summary.acwr > 1.3:
         front.append("Charge en hausse rapide (ACWR élevé) : semaine à venir plus "
                      "prudente pour éviter la blessure.")
-    if fast_share > 0.35:
+    if fast_share_excl > 0.35:   # excès hors séance qualité présumée → vraiment trop vite
         front.append("Trop d'allure rapide : l'ultra se construit en endurance facile "
                      "(Z2). Ralentis la majorité de tes sorties.")
     if longest_s > 0 and long_share < 0.28 and n >= 2:
@@ -229,7 +242,7 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
 
     rec = (front + rec) or ["Semaine solide — poursuis, en gardant l'endurance facile."]
 
-    return CoachAnalysis(_headline(adh, long_share, fast_share, summary),
+    return CoachAnalysis(_headline(adh, long_share, fast_share_excl, summary),
                          obs, trends, _dedupe(rec)[:3])
 
 

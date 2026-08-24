@@ -90,6 +90,9 @@ def _prepare_week(week_index, acts, today):
                                              program.N_WEEKS, today=today)
         weeks = strava.recent_completed_weeks(acts, today=today, n=4)
         week_runs, history_runs = weeks[0], weeks[1:]
+        # plus longue sortie sur les 3 dernières semaines (plafond long anti-saut)
+        last.rolling_longest_s = max(
+            (a.moving_time_s for wk in weeks[:3] for a in wk), default=0)
     res = adapt.adapt_week(planned, last)
     ws = program.upcoming_monday(today) - timedelta(days=7)
     analysis = coach.analyze(last, week_runs, history_runs, week_start=ws)

@@ -41,8 +41,8 @@ LONG_GROWTH_DEFAULT = 1.20
 LONG_GROWTH_BY_PHASE = {
     "Fondation": 1.20,
     "Force-endurance": 1.35,
-    "Spécifique": 1.75,
-    "Pic": 1.75,
+    "Spécifique": 1.60,
+    "Pic": 1.60,
     "Affûtage": 1.20,
 }
 
@@ -132,7 +132,8 @@ def _set_duration(spec: SessionSpec, target_min: float) -> SessionSpec:
 # --------------------------------------------------------------------------- #
 def _band_and_scale(adherence: float) -> Tuple[str, float]:
     if adherence < BAND_REPRISE:
-        return "reprise", 0.75
+        # proportionnel à la profondeur du trou : 20 % réalisé → ×0.50, 55 % → ×0.75
+        return "reprise", max(0.50, min(0.75, adherence + 0.20))
     if adherence < BAND_CONSOLIDE:
         return "consolide", 0.90
     if adherence <= BAND_NOMINAL_HAUT:
@@ -201,15 +202,17 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
     # 4) Plafond de la sortie longue (anti-saut) — INCONDITIONNEL hors décharge,
     #    avec un facteur dépendant de la phase (généreux en Spécifique/Pic).
     growth = long_growth(planned.phase)
-    if "long" in out.sessions and last.longest_run_s > 0:
+    # rolling max des ~3 dernières semaines : une longue sautée isolée ne sur-restreint pas
+    ref_long_s = max(last.longest_run_s, last.rolling_longest_s)
+    if "long" in out.sessions and ref_long_s > 0:
         long_spec = out.sessions["long"]
-        cap_min = (last.longest_run_s / 60.0) * growth
+        cap_min = (ref_long_s / 60.0) * growth
         if workouts.minutes(long_spec) > cap_min:
             capped = _set_duration(long_spec, cap_min)
             adjustments.append(Adjustment(
                 role="long", before=workouts.label(long_spec), after=workouts.label(capped),
-                reason=(f"plafonnée : +{(growth-1)*100:.0f} % max vs plus long réalisé "
-                        f"({last.longest_run_s/60:.0f}' → cap {cap_min:.0f}')"),
+                reason=(f"plafonnée : +{(growth-1)*100:.0f} % max vs plus longue récente "
+                        f"({ref_long_s/60:.0f}' → cap {cap_min:.0f}')"),
             ))
             out.sessions["long"] = capped
 

@@ -46,7 +46,9 @@ def _load() -> Dict:
                              ("PLAN_START", "plan_start"),
                              ("PLAN_WEEKS", "plan_weeks"),
                              ("DAYS_PER_WEEK", "days_per_week"),
-                             ("START_VOLUME_H", "start_volume_h")):
+                             ("START_VOLUME_H", "start_volume_h"),
+                             ("PEAK_VOLUME_H", "peak_volume_h"),
+                             ("OBJECTIVE", "objective")):
         if os.environ.get(env_key):
             data[cfg_key] = os.environ[env_key]
     return data
@@ -82,7 +84,8 @@ OBJECTIVE: str = _cfg["objective"]
 RACE_DATE: Optional[date] = _parse_date(_cfg["race_date"])
 PLAN_START: Optional[date] = _parse_date(_cfg["plan_start"])
 PLAN_WEEKS: Optional[int] = _parse_int(_cfg["plan_weeks"])
-DAYS_PER_WEEK: int = int(_cfg["days_per_week"] or 4)
+# jours/sem : borné [3,4] (seul 3 vs 4 est distingué aujourd'hui — cf. issue 5-6 j.)
+DAYS_PER_WEEK: int = max(3, min(4, _parse_int(_cfg["days_per_week"]) or 4))
 START_VOLUME_H: Optional[float] = _parse_float(_cfg["start_volume_h"])
 PEAK_VOLUME_H: Optional[float] = _parse_float(_cfg["peak_volume_h"])
 PACES: Dict[str, str] = dict(_cfg["paces"] or {})

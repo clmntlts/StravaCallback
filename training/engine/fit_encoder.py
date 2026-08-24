@@ -73,6 +73,10 @@ def fit_timestamp(unix_seconds: Optional[float] = None) -> int:
     return int(unix_seconds) - FIT_EPOCH_OFFSET
 
 
+# Horodatage fixe (1er janv. 2020 UTC = 1577836800) pour un encodage déterministe.
+FIXED_TIME_CREATED = 1577836800 - FIT_EPOCH_OFFSET
+
+
 # --------------------------------------------------------------------------- #
 # Enums de workout (sous-ensemble utile)
 # --------------------------------------------------------------------------- #
@@ -170,7 +174,8 @@ def _encode_file_id() -> bytes:
     data += struct.pack("<H", 255)             # manufacturer = development
     data += struct.pack("<H", 0)               # product
     data += struct.pack("<I", 1)               # serial_number (uint32z, !=0)
-    data += struct.pack("<I", fit_timestamp())  # time_created
+    # time_created FIGÉ (déterministe) : évite un diff git à chaque régénération.
+    data += struct.pack("<I", FIXED_TIME_CREATED)
     return _def_record(0, fields) + bytes(data)
 
 

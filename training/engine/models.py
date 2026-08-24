@@ -82,6 +82,7 @@ class WeekSummary:
     acute_hours: Optional[float] = None    # charge 7 j
     chronic_hours: Optional[float] = None  # charge moyenne hebdo (semaines -2..-4)
     data_available: bool = True            # False = aucune source Strava fournie
+    rolling_longest_s: int = 0             # plus longue sortie sur ~3 dernières sem.
 
     @property
     def actual_hours(self) -> float:

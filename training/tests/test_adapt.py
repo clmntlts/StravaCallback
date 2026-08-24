@@ -51,6 +51,19 @@ class TestBands(unittest.TestCase):
         self.assertLess(workouts.minutes(res.week.sessions["easy"]),
                         workouts.minutes(program.week(9).sessions["easy"]))
 
+    def test_reprise_scale_is_proportional(self):
+        self.assertAlmostEqual(adapt._band_and_scale(0.20)[1], 0.50, places=2)
+        self.assertAlmostEqual(adapt._band_and_scale(0.55)[1], 0.75, places=2)
+
+    def test_rolling_longest_relaxes_cap(self):
+        base = dict(n_runs=3, total_time_s=12000, total_dist_m=40000,
+                    total_elev_m=300, longest_run_s=40 * 60, planned_time_s=16200)
+        l_no = workouts.minutes(adapt.adapt_week(
+            program.week(9), WeekSummary(**base)).week.sessions["long"])
+        l_roll = workouts.minutes(adapt.adapt_week(
+            program.week(9), WeekSummary(**base, rolling_longest_s=180 * 60)).week.sessions["long"])
+        self.assertGreater(l_roll, l_no)  # une longue récente relâche le plafond
+
     def test_vigilance_no_overdose(self):
         res = adapt.adapt_week(program.week(9), summary(1.35))
         self.assertEqual(res.band, "vigilance")

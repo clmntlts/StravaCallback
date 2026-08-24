@@ -129,6 +129,22 @@ class TestCoach(unittest.TestCase):
         # les constats sont chiffrés (au moins un contient un chiffre)
         self.assertTrue(any(any(c.isdigit() for c in o) for o in a.observations))
 
+    def test_single_fast_run_not_flagged_too_fast(self):
+        ws = date(2026, 9, 7)
+        runs = [Activity("2026-09-08", 3600, 10000, 40, "Run", 140),   # facile 6:00
+                Activity("2026-09-09", 1800, 6000, 30, "Run", 165),    # qualité 5:00 (rapide)
+                Activity("2026-09-13", 6000, 16000, 300, "Run", 145)]  # long facile
+        summ = WeekSummary(3, sum(r.moving_time_s for r in runs), 32000, 370, 6000, 16200)
+        a = coach.analyze(summ, runs, week_start=ws)
+        self.assertFalse(any("ralentis" in r.lower() for r in a.recommendations))
+
+    def test_backyard_is_distance_based(self):
+        g = garmin_workout.session_to_garmin(SessionSpec("backyard", {"loops": 6}))
+        rep = [s for s in g["steps"] if s.get("type") == "WorkoutRepeatStep"][0]
+        kinds = [c["durationType"] for c in rep["steps"]]
+        self.assertIn("DISTANCE", kinds)   # boucle à distance fixe (6,7 km)
+        self.assertIn("TIME", kinds)       # repos = complément à l'heure
+
     def test_no_runs_message(self):
         empty = WeekSummary(0, 0, 0, 0, 0, 16000, data_available=True)
         a = coach.analyze(empty, [])
@@ -172,10 +188,20 @@ class TestAthleteConfig(unittest.TestCase):
         phases = {"Fondation", "Force-endurance", "Spécifique", "Pic", "Affûtage"}
         for N in (10, 16, 20, 28):
             sel = program._select(program._ROWS, N)
+            taper_len = 3 if N >= 14 else 2
             self.assertEqual(len(sel), N)
             self.assertEqual([r[0] for r in sel], list(range(1, N + 1)))  # ré-indexé
             self.assertEqual({r[1] for r in sel}, phases)                 # toutes les phases
-            self.assertEqual([r[1] for r in sel[-3:]], ["Affûtage"] * 3)  # taper intact
+            self.assertEqual([r[1] for r in sel[-taper_len:]], ["Affûtage"] * taper_len)
+            # décharges : rythme 3:1, jamais consécutives
+            dl = [r[0] for r in sel if r[2]]
+            self.assertTrue(all(b - a >= 2 for a, b in zip(dl, dl[1:])))
+
+    def test_short_plans_do_not_hang(self):
+        # régression : N=7/8 bouclait à l'infini dans _allocate
+        for N in (4, 5, 6, 7, 8, 9):
+            sel = program._select(program._ROWS, N)
+            self.assertEqual(len(sel), N)
 
     def test_compression_noop_when_full(self):
         self.assertEqual(len(program._select(program._ROWS, program.TEMPLATE_WEEKS)),
