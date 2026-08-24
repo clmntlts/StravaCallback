@@ -132,8 +132,23 @@ _BAND_LABEL = {
 }
 
 
+def _analysis_html(analysis) -> str:
+    if analysis is None:
+        return ""
+    obs = "".join(f"<li>{_esc(o)}</li>" for o in analysis.observations)
+    rec = "".join(f"<li>{_esc(r)}</li>" for r in analysis.recommendations)
+    return (
+        '<section class="card">'
+        '<div class="h2">Debrief de la semaine passée</div>'
+        f'<p class="verdict">{_esc(analysis.headline)}</p>'
+        f'<div class="h3">Constats</div><ul class="obs">{obs}</ul>'
+        f'<div class="h3">À travailler</div><ul class="rec">{rec}</ul>'
+        '</section>')
+
+
 def build(res: AdaptResult, last: WeekSummary,
-          actual_hours: List[Optional[float]], today: Optional[date] = None) -> str:
+          actual_hours: List[Optional[float]], analysis=None,
+          today: Optional[date] = None) -> str:
     today = today or date.today()
     w = res.week
     idx = w.index
@@ -179,6 +194,7 @@ def build(res: AdaptResult, last: WeekSummary,
         idx=idx, n=program.N_WEEKS, phase=_esc(w.phase), pct=pct,
         note=_esc(w.note), dates=f"{ws.strftime('%d/%m')} – {we.strftime('%d/%m/%Y')}",
         jrs=jrs, msg=_esc(res.message), rows=rows, adj=adj, kpis=kpis,
+        analysis=_analysis_html(analysis),
         chart=_load_curve_svg(planned, actual_hours, idx),
     )
 
@@ -249,6 +265,12 @@ td.n{{text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--accen
   white-space:nowrap; font-variant-numeric:tabular-nums}}
 .adj{{margin-top:4px}} .adj ul{{margin:0; padding-left:1.05em}}
 .adj li{{margin:.34em 0; font-size:.9rem}} .muted{{color:var(--muted)}}
+.verdict{{font-family:"Barlow Condensed",sans-serif; font-weight:600; font-size:1.15rem;
+  color:var(--accent-ink); margin:0 0 6px}}
+ul.obs,ul.rec{{margin:2px 0 0; padding-left:1.05em}}
+ul.obs li{{margin:.32em 0; font-size:.94rem}}
+ul.rec li{{margin:.36em 0; font-size:.94rem; font-weight:500}}
+ul.rec li::marker{{color:var(--accent)}}
 
 .chart{{width:100%; height:auto; display:block; margin-top:4px}}
 .chart .band{{fill:#eef1ee}}
@@ -288,6 +310,8 @@ footer{{margin-top:22px; text-align:center; color:var(--faint); font-size:.8rem}
     <table>{rows}</table>
     {adj}
   </section>
+
+  {analysis}
 
   <section class="card">
     <div class="h2">Progression — prévu vs réalisé</div>

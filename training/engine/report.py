@@ -19,12 +19,22 @@ def _ordered_roles(week: PlannedWeek):
 # --------------------------------------------------------------------------- #
 # Rapport hebdomadaire adaptatif
 # --------------------------------------------------------------------------- #
-def week_report_md(res: AdaptResult, last: WeekSummary, files: dict) -> str:
+def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=None) -> str:
     w = res.week
     L = []
     L.append(f"# Semaine {w.index} — {w.phase}{' (décharge)' if w.deload else ''}\n")
     L.append(f"> {w.note}\n")
     L.append(f"**Lecture du coach.** {res.message}\n")
+
+    if analysis is not None:
+        L.append(f"\n## Debrief de la semaine passée\n")
+        L.append(f"**{analysis.headline}**\n")
+        if analysis.observations:
+            L.append("\n_Constats :_")
+            L.extend(f"- {o}" for o in analysis.observations)
+        if analysis.recommendations:
+            L.append("\n_À travailler :_")
+            L.extend(f"- {r}" for r in analysis.recommendations)
 
     L.append("\n## Séances de la semaine\n")
     L.append("| Jour | Rôle | Séance | Durée | Fichier |")
@@ -61,9 +71,9 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict) -> str:
     return "\n".join(L) + "\n"
 
 
-def week_report_json(res: AdaptResult, last: WeekSummary, files: dict) -> dict:
+def week_report_json(res: AdaptResult, last: WeekSummary, files: dict, analysis=None) -> dict:
     w = res.week
-    return {
+    data = {
         "week": w.index,
         "phase": w.phase,
         "deload": w.deload,
@@ -96,6 +106,13 @@ def week_report_json(res: AdaptResult, last: WeekSummary, files: dict) -> dict:
             "acwr": last.acwr,
         },
     }
+    if analysis is not None:
+        data["analysis"] = {
+            "headline": analysis.headline,
+            "observations": analysis.observations,
+            "recommendations": analysis.recommendations,
+        }
+    return data
 
 
 # --------------------------------------------------------------------------- #

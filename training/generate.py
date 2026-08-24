@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from engine import (adapt, dashboard, deliver, garmin, garmin_workout,           # noqa: E402
+from engine import (adapt, coach, dashboard, deliver, garmin, garmin_workout,    # noqa: E402
                     program, report, strava, workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
@@ -82,16 +82,19 @@ def _prepare_week(week_index, acts, today):
     if acts is None:
         last = WeekSummary(0, 0, 0, 0, 0, 0, data_available=False)
         actuals = [None] * program.N_WEEKS
+        week_runs = []
     else:
         planned_prev_s = _prescribed_prev_seconds(week_index, acts, today)
         last = strava.completed_week_summary(acts, planned_prev_s, today=today)
         actuals = strava.weekly_actual_hours(acts, program.PROGRAM_START,
                                              program.N_WEEKS, today=today)
+        week_runs = strava.completed_week_runs(acts, today=today)
     res = adapt.adapt_week(planned, last)
-    return res, last, actuals
+    analysis = coach.analyze(last, week_runs)
+    return res, last, actuals, analysis
 
 
-def _write_week(res, last, actuals, outdir, today):
+def _write_week(res, last, actuals, analysis, outdir, today):
     os.makedirs(outdir, exist_ok=True)
     files = {}
     for i, role in enumerate(ordered_roles(res.week.sessions), start=1):
@@ -100,10 +103,11 @@ def _write_week(res, last, actuals, outdir, today):
         write_fit(workouts.build_workout(spec), os.path.join(outdir, fname))
         files[role] = fname
     with open(os.path.join(outdir, "rapport.md"), "w", encoding="utf-8") as f:
-        f.write(report.week_report_md(res, last, files))
+        f.write(report.week_report_md(res, last, files, analysis))
     with open(os.path.join(outdir, "rapport.json"), "w", encoding="utf-8") as f:
-        json.dump(report.week_report_json(res, last, files), f, ensure_ascii=False, indent=2)
-    dash = dashboard.build(res, last, actuals, today=today)
+        json.dump(report.week_report_json(res, last, files, analysis), f,
+                  ensure_ascii=False, indent=2)
+    dash = dashboard.build(res, last, actuals, analysis, today=today)
     dash_path = os.path.join(outdir, "dashboard.html")
     with open(dash_path, "w", encoding="utf-8") as f:
         f.write(dash)
@@ -156,9 +160,9 @@ def _print_summary(res, files, outdir):
 def cmd_week(args):
     acts, today = _load_activities(args)
     idx = _resolve_week(args, today)
-    res, last, actuals = _prepare_week(idx, acts, today)
+    res, last, actuals, analysis = _prepare_week(idx, acts, today)
     outdir = args.outdir or os.path.join(WORKOUTS_DIR, f"semaine_{idx:02d}")
-    files, dash_path, _ = _write_week(res, last, actuals, outdir, today)
+    files, dash_path, _ = _write_week(res, last, actuals, analysis, outdir, today)
     _print_summary(res, files, outdir)
     if getattr(args, "push_garmin", False):
         _push_garmin(res, idx)
@@ -171,9 +175,9 @@ def cmd_send(args):
                          "--activities <fichier>, ou --dry-run pour tester sans envoyer.")
     acts, today = _load_activities(args)
     idx = _resolve_week(args, today)
-    res, last, actuals = _prepare_week(idx, acts, today)
+    res, last, actuals, analysis = _prepare_week(idx, acts, today)
     outdir = args.outdir or os.path.join(WORKOUTS_DIR, f"semaine_{idx:02d}")
-    files, dash_path, dash_html = _write_week(res, last, actuals, outdir, today)
+    files, dash_path, dash_html = _write_week(res, last, actuals, analysis, outdir, today)
     _print_summary(res, files, outdir)
 
     subject = f"🏃 Semaine {idx}/{program.N_WEEKS} — {res.week.phase} [{res.band}]"

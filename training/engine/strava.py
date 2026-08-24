@@ -199,6 +199,13 @@ def weekly_actual_hours(acts: List[Activity], start: date, n_weeks: int,
     return buckets
 
 
+def completed_week_runs(acts: List[Activity], today: Optional[date] = None) -> List[Activity]:
+    """Courses de la semaine qui vient de se terminer (relative au lundi à venir)."""
+    today = today or datetime.now(timezone.utc).date()
+    um = today + timedelta(days=(7 - today.weekday()) % 7)
+    return _runs(in_range(acts, um - timedelta(days=7), um))
+
+
 def completed_week_summary(acts: List[Activity], planned_time_s: int,
                            today: Optional[date] = None) -> WeekSummary:
     """Résumé de la semaine qui VIENT DE SE TERMINER, relative au lundi à venir.

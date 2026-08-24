@@ -5,7 +5,8 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine import adapt, dashboard, deliver, garmin, garmin_workout, program, strava
+from engine import (adapt, coach, dashboard, deliver, garmin, garmin_workout,
+                    program, strava)
 from engine.models import Activity, SessionSpec, WeekSummary
 
 
@@ -108,6 +109,31 @@ class TestGarminTranslate(unittest.TestCase):
                     walk(n["steps"])
         walk(w["steps"])
         self.assertEqual(len(orders), len(set(orders)))
+
+
+class TestCoach(unittest.TestCase):
+    def _fixture_analysis(self):
+        acts = strava.load_activities_file(
+            os.path.join(os.path.dirname(__file__), "fixtures", "last_week_sample.json"))
+        today = date(2026, 9, 14)
+        summ = strava.completed_week_summary(acts, 16000, today=today)
+        runs = strava.completed_week_runs(acts, today=today)
+        return coach.analyze(summ, runs)
+
+    def test_analysis_has_content(self):
+        a = self._fixture_analysis()
+        self.assertTrue(a.headline)
+        self.assertTrue(a.observations)
+        self.assertTrue(a.recommendations)
+        self.assertLessEqual(len(a.recommendations), 3)
+        # les constats sont chiffrés (au moins un contient un chiffre)
+        self.assertTrue(any(any(c.isdigit() for c in o) for o in a.observations))
+
+    def test_no_runs_message(self):
+        empty = WeekSummary(0, 0, 0, 0, 0, 16000, data_available=True)
+        a = coach.analyze(empty, [])
+        self.assertIn("course", a.headline.lower())
+        self.assertTrue(a.recommendations)
 
 
 class TestGarminConfig(unittest.TestCase):
