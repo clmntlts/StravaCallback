@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+# sorties hebdo générées (regénérables via generate.py week N)
+workouts/semaine_*/

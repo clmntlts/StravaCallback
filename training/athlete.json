@@ -1,0 +1,26 @@
+{
+  "_comment": "Profil athlète = mémoire intersessions du moteur. Rempli automatiquement au 1er démarrage (Claude pose les questions), il pilote tout le plan. Toute session le lit depuis le repo.",
+
+  "onboarded": false,
+
+  "objective": "18-24 yards",
+  "race_date": "2027-04-24",
+
+  "plan_start": null,
+  "plan_weeks": null,
+
+  "days_per_week": 4,
+
+  "start_volume_h": null,
+  "peak_volume_h": null,
+
+  "paces": {
+    "recovery": "6:45",
+    "easy": "6:15",
+    "long": "6:40",
+    "yard": "6:30",
+    "steady": "5:35",
+    "tempo": "5:00",
+    "cruise": "4:55"
+  }
+}
