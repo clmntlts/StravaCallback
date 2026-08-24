@@ -11,9 +11,9 @@ Tout est **paramétrable** (objectif, date de course, durée, volume, jours par
 semaine, allures) par un simple fichier de profil, et le tout peut tourner en
 **automatique une fois par semaine**.
 
-> Le dépôt contient aussi un petit **callback OAuth Strava** (Vercel + webhook)
-> sous `api/` — l'étape d'autorisation initiale. Le moteur d'entraînement vit
-> sous `training/`.
+Le projet est **autonome** : aucun service externe requis. L'autorisation Strava
+et Garmin se fait par des commandes intégrées, et **ouvrir le dépôt dans une
+session Claude « démarre » le projet automatiquement** (voir plus bas).
 
 ---
 
@@ -79,6 +79,23 @@ python3 generate.py config
 Pour un usage réel, on remplace `--activities <fichier>` par `--live` (lecture
 Strava en direct) une fois les accès configurés (voir plus bas).
 
+### Ouverture dans une session Claude (auto-lancement)
+
+Un **hook `SessionStart`** ([`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh))
+fait que **le projet démarre tout seul** à l'ouverture du dépôt dans une session
+Claude : il prépare l'environnement (parseur `.FIT` pour les tests) et affiche un
+**briefing** — profil effectif, durée du plan, état des accès (Strava/Gmail/Garmin)
+et les prochaines actions. Aucune configuration n'est nécessaire ; le hook
+s'exécute automatiquement.
+
+### Obtenir un token Strava (une fois, sans service externe)
+
+```bash
+python3 generate.py strava-auth-url                  # ouvre l'URL, autorise
+python3 generate.py strava-auth-exchange --code <CODE>
+# -> stocker le refresh_token renvoyé dans STRAVA_REFRESH_TOKEN
+```
+
 ---
 
 ## Le profil athlète (configuration + mémoire)
@@ -133,6 +150,7 @@ Toutes les commandes se lancent depuis `training/` : `python3 generate.py <cmd>`
 | `library` | Génère toute la bibliothèque de séances nominales dans `workouts/`. |
 | `plan` | Régénère la vue d'ensemble du plan (`plan.md` + `plan.html`). |
 | `config` | Affiche le profil effectif et les valeurs dérivées (durée, semaine 1, échelle…). |
+| `strava-auth-url` / `strava-auth-exchange` | Autorisation Strava en deux étapes → `refresh_token` (une seule fois). |
 | `garmin-auth-url` / `garmin-auth-exchange` | Autorisation Garmin en deux étapes (une seule fois). |
 
 Options communes à `week`/`send` :
@@ -279,8 +297,12 @@ training/
   README.md           # détails moteur
   RUNBOOK.md          # procédure d'automatisation hebdomadaire
 
-api/                  # callback OAuth Strava (Vercel) + relais webhook
-index.html            # page de redirection OAuth
+.claude/
+  settings.json       # enregistre le hook SessionStart
+  hooks/session-start.sh  # briefing + préparation à l'ouverture d'une session
+  commands/backlog.md # commande /backlog (suivi des issues)
+CLAUDE.md             # guide projet + politique de suivi
+README.md             # ce guide
 ```
 
 Le suivi des développements en cours se fait en **issues GitHub** (label

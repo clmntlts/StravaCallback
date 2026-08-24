@@ -62,6 +62,36 @@ def refresh_access_token(client_id=None, client_secret=None, refresh_token=None)
 
 
 # --------------------------------------------------------------------------- #
+# Autorisation initiale (obtenir un refresh_token, une seule fois)
+# Remplace l'ancien callback OAuth : le projet est autonome.
+# --------------------------------------------------------------------------- #
+STRAVA_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
+
+
+def authorize_url(client_id=None, redirect_uri=None, scope="activity:read_all") -> str:
+    """URL de consentement Strava à ouvrir UNE fois dans un navigateur."""
+    params = urllib.parse.urlencode({
+        "client_id": client_id or os.environ.get("STRAVA_CLIENT_ID", ""),
+        "response_type": "code",
+        "redirect_uri": redirect_uri or os.environ.get("STRAVA_REDIRECT_URI", "http://localhost"),
+        "approval_prompt": "force",
+        "scope": scope,
+    })
+    return f"{STRAVA_AUTHORIZE_URL}?{params}"
+
+
+def exchange_code(code: str, client_id=None, client_secret=None) -> dict:
+    """Échange le code d'autorisation contre {access_token, refresh_token, ...}."""
+    body = urllib.parse.urlencode({
+        "client_id": client_id or os.environ.get("STRAVA_CLIENT_ID"),
+        "client_secret": client_secret or os.environ.get("STRAVA_CLIENT_SECRET"),
+        "code": code,
+        "grant_type": "authorization_code",
+    }).encode()
+    return _http(STRAVA_TOKEN_URL, data=body, method="POST")
+
+
+# --------------------------------------------------------------------------- #
 # Récupération d'activités
 # --------------------------------------------------------------------------- #
 def _to_activity(a: dict) -> Activity:

@@ -65,9 +65,10 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GARMIN_REDIRECT_URI` | *(auth Garmin)* URL de redirection déclarée sur l'app |
 | `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
 
-- Jeton Strava : créer une app sur https://www.strava.com/settings/api, autoriser
-  le scope `activity:read`, échanger le code contre un `refresh_token`. (Le callback
-  OAuth du repo, `api/sendCode.js`, sert déjà à récupérer le code.)
+- Jeton Strava : créer une app sur https://www.strava.com/settings/api, puis
+  utiliser les commandes intégrées (aucun service externe requis) :
+  `python3 generate.py strava-auth-url` → autoriser → `strava-auth-exchange --code <CODE>`
+  → stocker le `refresh_token` dans `STRAVA_REFRESH_TOKEN`.
 - Mot de passe d'application Gmail : https://myaccount.google.com/apppasswords
 
 Sans ces variables, `generate.py send --live` s'arrête avec un message explicite.

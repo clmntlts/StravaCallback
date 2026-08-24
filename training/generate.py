@@ -236,6 +236,23 @@ def cmd_plan(args):
     print("plan.md régénéré" + (" + plan.html mis à jour" if os.path.exists(html) else ""))
 
 
+def cmd_strava_auth_url(args):
+    print("1) Ouvre cette URL et autorise l'accès (lecture des activités) :\n")
+    print("   " + strava.authorize_url())
+    print("\n2) Après redirection, copie le paramètre ?code=… puis lance :")
+    print("   python3 generate.py strava-auth-exchange --code <CODE>")
+    print("\n(Requiert STRAVA_CLIENT_ID ; STRAVA_REDIRECT_URI par défaut http://localhost.)")
+
+
+def cmd_strava_auth_exchange(args):
+    tokens = strava.exchange_code(args.code)
+    print(json.dumps({k: tokens.get(k) for k in
+                      ("token_type", "expires_at", "refresh_token", "access_token")},
+                     ensure_ascii=False, indent=2))
+    if "refresh_token" in tokens:
+        print("\n➡️  Stocke ce refresh_token en variable d'env STRAVA_REFRESH_TOKEN.")
+
+
 def cmd_garmin_auth_url(args):
     verifier, challenge = garmin.make_pkce()
     print("1) Ouvre cette URL dans un navigateur et autorise l'accès :\n")
@@ -299,6 +316,13 @@ def main(argv=None):
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
     sub.add_parser("config", help="Affiche le profil athlète effectif").set_defaults(func=cmd_config)
+
+    sub.add_parser("strava-auth-url",
+                   help="Étape 1 auth Strava : imprime l'URL de consentement").set_defaults(func=cmd_strava_auth_url)
+    psx = sub.add_parser("strava-auth-exchange",
+                         help="Étape 2 auth Strava : échange le code contre le refresh_token")
+    psx.add_argument("--code", required=True, help="Code d'autorisation (paramètre ?code= du redirect)")
+    psx.set_defaults(func=cmd_strava_auth_exchange)
 
     pau = sub.add_parser("garmin-auth-url",
                          help="Étape 1 auth Garmin : imprime l'URL de consentement + le verifier")
