@@ -165,19 +165,31 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
                     "(non adaptée). Fournir l'activité pour l'adaptation.",
         )
 
+    # Base aérobie entretenue par le cross-training (vélo, etc.) ? Si la charge
+    # aérobie TOTALE réalisée atteint ~le volume course prévu, l'athlète n'est pas
+    # déconditionné : on ne régresse pas le plan course sur la seule pénurie de
+    # course. La sécurité SPÉCIFIQUE course (plafond de la sortie longue) reste,
+    # elle, pilotée par la course seule plus bas.
+    base_maintained = last.cross_hours > 0 and last.aerobic_adherence >= BAND_CONSOLIDE
+
     # 1ter) Semaine terminée SANS aucune sortie alors qu'il y avait du prévu :
     # probable trou de synchro plutôt qu'un vrai zéro → on ne régresse pas en
     # silence, on tient le nominal et on signale pour vérification humaine.
-    if last.planned_time_s > 0 and last.n_runs == 0:
+    # Exception : si du cross-training a maintenu la base, on tient le nominal
+    # sereinement (pas d'alerte "synchro manquée").
+    if last.planned_time_s > 0 and last.n_runs == 0 and not base_maintained:
         return AdaptResult(
-            week=out, adjustments=[], band="verifier", scale=1.0, acwr=last.acwr,
+            week=out, adjustments=[], band="verifier", scale=1.0, acwr=last.aerobic_acwr,
             message="0 sortie détectée la semaine passée (repos réel ou synchro "
                     "manquée ?). Semaine tenue au nominal — à vérifier.",
         )
 
     adherence = last.adherence
     band, scale = _band_and_scale(adherence)
-    acwr = last.acwr
+    # Garde-fou anti-régression : la base est là (cross-training) → pas de recul.
+    if base_maintained and band in ("reprise", "consolide"):
+        band, scale = "nominal", 1.0
+    acwr = last.aerobic_acwr  # ACWR sur la charge aérobie totale (fatigue réelle)
 
     # 2) Garde-fou ACWR : peut durcir le frein
     brake_quality = False
@@ -227,11 +239,12 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
             ))
             out.sessions["quality"] = easy_spec
 
-    message = _message(band, adherence, acwr, last, adjustments)
+    message = _message(band, adherence, acwr, last, adjustments, base_maintained)
     return AdaptResult(out, adjustments, band, scale, acwr, message)
 
 
-def _message(band, adherence, acwr, last: WeekSummary, adjustments) -> str:
+def _message(band, adherence, acwr, last: WeekSummary, adjustments,
+             base_maintained: bool = False) -> str:
     head = {
         "reprise": "REPRISE — semaine passée bien en deçà du prévu, on régresse pour repartir sainement.",
         "consolide": "CONSOLIDATION — semaine passée partiellement réalisée, on tempère.",
@@ -242,6 +255,9 @@ def _message(band, adherence, acwr, last: WeekSummary, adjustments) -> str:
     if last.planned_time_s > 0:
         bits.append(f"Réalisé {last.actual_hours:.1f} h / {last.planned_hours:.1f} h prévues "
                     f"({adherence:.0%}), {last.n_runs} sorties.")
+    if base_maintained and last.cross_hours > 0:
+        bits.append(f"Base aérobie tenue par le cross-training "
+                    f"({last.cross_hours:.1f} h vélo/autre) : pas de régression.")
     if acwr is not None:
         bits.append(f"ACWR {acwr:.2f}.")
     if not adjustments:

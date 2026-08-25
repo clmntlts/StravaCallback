@@ -17,6 +17,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
+from . import config
 from .models import Activity, WeekSummary
 
 STRAVA_API = "https://www.strava.com/api/v3"
@@ -24,6 +25,15 @@ STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 
 # Types d'activités comptées comme "course à pied" (valeurs Strava sport_type)
 RUN_TYPES = {"Run", "TrailRun", "VirtualRun"}
+
+# Cross-training aérobie (compte dans la BASE/charge, pondéré ; jamais dans le
+# volume course prescrit). Vélo, rameur, ski de fond, elliptique, natation…
+CROSS_TYPES = {
+    "Ride", "GravelRide", "VirtualRide", "MountainBikeRide", "EBikeRide",
+    "EMountainBikeRide", "Handcycle", "Velomobile",
+    "Rowing", "VirtualRow", "Kayaking", "Canoeing", "Swim",
+    "NordicSki", "BackcountrySki", "RollerSki", "Elliptical", "StairStepper",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -145,6 +155,15 @@ def _runs(acts: List[Activity]) -> List[Activity]:
     return [a for a in acts if a.sport in RUN_TYPES]
 
 
+def _cross(acts: List[Activity]) -> List[Activity]:
+    """Activités de cross-training aérobie (vélo, etc.) — hors course."""
+    return [a for a in acts if a.sport in CROSS_TYPES]
+
+
+def _hours(acts: List[Activity]) -> float:
+    return sum(a.moving_time_s for a in acts) / 3600.0
+
+
 def in_range(acts: List[Activity], start: date, end: date) -> List[Activity]:
     """Activités dont la date ∈ [start, end)."""
     out = []
@@ -162,9 +181,11 @@ def in_range(acts: List[Activity], start: date, end: date) -> List[Activity]:
 ACWR_MIN_HISTORY_WEEKS = 3
 
 
-def _earliest_run_date(acts: List[Activity]) -> Optional[date]:
+def _earliest_aerobic_date(acts: List[Activity]) -> Optional[date]:
+    """Première activité aérobie (course OU cross-training) : borne l'historique
+    de charge chronique. Un long passé vélo compte donc comme de la base."""
     dates = []
-    for a in _runs(acts):
+    for a in _runs(acts) + _cross(acts):
         try:
             dates.append(datetime.strptime(a.date, "%Y-%m-%d").date())
         except ValueError:
@@ -174,24 +195,34 @@ def _earliest_run_date(acts: List[Activity]) -> Optional[date]:
 
 def summarize_week(week_acts: List[Activity], planned_time_s: int,
                    history_acts: Optional[List[Activity]] = None,
-                   history_weeks: int = 3, data_available: bool = True) -> WeekSummary:
-    """Synthèse de la semaine + charge aiguë/chronique.
+                   history_weeks: int = 3, data_available: bool = True,
+                   cross_weight: Optional[float] = None) -> WeekSummary:
+    """Synthèse de la semaine + charge aiguë/chronique (course ET aérobie totale).
 
     ACWR **non-couplé** : `history_acts` = les semaines PRÉCÉDANT la semaine
     évaluée (elle exclue), et le chronique est divisé par le nombre de semaines
     réellement couvertes (pas un 4.0 en dur). Chronique None si historique < seuil.
+
+    Deux charges sont calculées en parallèle :
+      - **course seule** (acute/chronic) : pilote le volume course prescrit ;
+      - **aérobie totale** (aerobic_*) : course + cross-training pondéré
+        (`cross_weight`), pour l'ACWR de fatigue et le garde-fou anti-régression.
     """
+    weight = config.CROSS_TRAINING_WEIGHT if cross_weight is None else cross_weight
     runs = _runs(week_acts)
     total_time = sum(a.moving_time_s for a in runs)
     total_dist = sum(a.distance_m for a in runs)
     total_elev = sum(a.elevation_m for a in runs)
     longest = max((a.moving_time_s for a in runs), default=0)
+    cross_time = sum(a.moving_time_s for a in _cross(week_acts))
 
     acute = total_time / 3600.0
-    chronic = None
+    aerobic_acute = acute + weight * (cross_time / 3600.0)
+    chronic = aerobic_chronic = None
     if history_acts and history_weeks >= ACWR_MIN_HISTORY_WEEKS:
-        hist_runs = _runs(history_acts)
-        chronic = sum(a.moving_time_s for a in hist_runs) / 3600.0 / history_weeks
+        chronic = _hours(_runs(history_acts)) / history_weeks
+        aerobic_chronic = (_hours(_runs(history_acts))
+                           + weight * _hours(_cross(history_acts))) / history_weeks
 
     return WeekSummary(
         n_runs=len(runs),
@@ -203,6 +234,9 @@ def summarize_week(week_acts: List[Activity], planned_time_s: int,
         acute_hours=acute,
         chronic_hours=chronic,
         data_available=data_available,
+        cross_time_s=cross_time,
+        aerobic_acute_hours=aerobic_acute,
+        aerobic_chronic_hours=aerobic_chronic,
     )
 
 
@@ -262,7 +296,7 @@ def completed_week_summary(acts: List[Activity], planned_time_s: int,
     week_acts = in_range(acts, completed_start, um)
     hist = in_range(acts, completed_start - timedelta(days=21), completed_start)
 
-    earliest = _earliest_run_date(acts)
+    earliest = _earliest_aerobic_date(acts)
     history_weeks = 0
     if earliest is not None:
         history_weeks = max(0, min(3, (completed_start - earliest).days // 7))

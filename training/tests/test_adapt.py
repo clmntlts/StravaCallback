@@ -72,6 +72,48 @@ class TestBands(unittest.TestCase):
                              program.planned_hours(program.week(9)) + 0.01)
 
 
+class TestCrossTraining(unittest.TestCase):
+    def _low_run(self, cross_h=0.0, chronic=None):
+        planned_s = int(4.5 * 3600)
+        run_s = int(planned_s * 0.4)                 # 40 % d'adhérence course
+        aero = run_s / 3600 + 0.5 * cross_h
+        return WeekSummary(
+            n_runs=2, total_time_s=run_s, total_dist_m=20000, total_elev_m=200,
+            longest_run_s=60 * 60, planned_time_s=planned_s,
+            cross_time_s=int(cross_h * 3600),
+            aerobic_acute_hours=aero, aerobic_chronic_hours=chronic)
+
+    def test_cross_training_prevents_regression(self):
+        # course faible mais 6 h de vélo -> base tenue -> nominal (pas de reprise)
+        res = adapt.adapt_week(program.week(9), self._low_run(cross_h=6.0, chronic=4.5))
+        self.assertEqual(res.band, "nominal")
+        self.assertIn("cross-training", res.message)
+
+    def test_no_cross_still_regresses(self):
+        # même adhérence course faible, sans vélo -> reprise (comportement inchangé)
+        res = adapt.adapt_week(program.week(9), self._low_run(cross_h=0.0))
+        self.assertEqual(res.band, "reprise")
+
+    def test_massive_cycling_block_brakes_via_aerobic_acwr(self):
+        # peu de course mais bloc vélo massif -> ACWR aérobie élevé -> frein qualité
+        last = WeekSummary(
+            n_runs=1, total_time_s=40 * 60, total_dist_m=8000, total_elev_m=80,
+            longest_run_s=40 * 60, planned_time_s=int(4.5 * 3600),
+            cross_time_s=20 * 3600,
+            aerobic_acute_hours=40 / 60 + 0.5 * 20, aerobic_chronic_hours=4.0)
+        self.assertGreater(last.aerobic_acwr, 1.5)
+        res = adapt.adapt_week(program.week(9), last)
+        self.assertLessEqual(res.scale, 0.8)
+        self.assertEqual(res.week.sessions["quality"].template, "easy")
+
+    def test_long_cap_stays_run_specific(self):
+        # grosse base vélo NE relâche PAS le plafond de la longue (sécurité impact)
+        last = self._low_run(cross_h=10.0, chronic=5.0)   # base énorme
+        res = adapt.adapt_week(program.week(9), last)
+        cap = 60 * adapt.long_growth(program.week(9).phase)  # vs plus longue course = 60'
+        self.assertLessEqual(workouts.minutes(res.week.sessions["long"]), cap + 2.5)
+
+
 class TestGuards(unittest.TestCase):
     def test_deload_is_untouched(self):
         w = program.week(4)  # décharge

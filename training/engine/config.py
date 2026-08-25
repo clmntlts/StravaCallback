@@ -27,6 +27,11 @@ _DEFAULTS = {
     "days_per_week": 4,
     "start_volume_h": None,
     "peak_volume_h": None,
+    # Poids d'une heure de cross-training (vélo, rameur…) dans la charge AÉROBIE,
+    # relativement à une heure de course. 0.5 = une heure de vélo « vaut » une
+    # demi-heure de course pour la base/ACWR (course non-portée vs portée). La
+    # progression du volume COURSE reste, elle, pilotée par la course seule.
+    "cross_training_weight": 0.5,
     "paces": {},
 }
 
@@ -48,6 +53,7 @@ def _load() -> Dict:
                              ("DAYS_PER_WEEK", "days_per_week"),
                              ("START_VOLUME_H", "start_volume_h"),
                              ("PEAK_VOLUME_H", "peak_volume_h"),
+                             ("CROSS_TRAINING_WEIGHT", "cross_training_weight"),
                              ("OBJECTIVE", "objective")):
         if os.environ.get(env_key):
             data[cfg_key] = os.environ[env_key]
@@ -88,6 +94,9 @@ PLAN_WEEKS: Optional[int] = _parse_int(_cfg["plan_weeks"])
 DAYS_PER_WEEK: int = max(3, min(4, _parse_int(_cfg["days_per_week"]) or 4))
 START_VOLUME_H: Optional[float] = _parse_float(_cfg["start_volume_h"])
 PEAK_VOLUME_H: Optional[float] = _parse_float(_cfg["peak_volume_h"])
+# Poids du cross-training dans la charge aérobie ; borné [0, 1].
+CROSS_TRAINING_WEIGHT: float = max(0.0, min(1.0,
+    _parse_float(_cfg["cross_training_weight"]) if _cfg["cross_training_weight"] is not None else 0.5))
 PACES: Dict[str, str] = dict(_cfg["paces"] or {})
 
 
@@ -100,6 +109,7 @@ def summary() -> Dict:
         "days_per_week": DAYS_PER_WEEK,
         "start_volume_h": START_VOLUME_H,
         "peak_volume_h": PEAK_VOLUME_H,
+        "cross_training_weight": CROSS_TRAINING_WEIGHT,
         "paces_overridden": sorted(PACES.keys()),
         "config_path": CONFIG_PATH,
     }

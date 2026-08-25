@@ -48,6 +48,29 @@ class TestACWR(unittest.TestCase):
         self.assertAlmostEqual(s.chronic_hours, 1.0, places=3)  # 3h / 3
 
 
+class TestCrossTrainingLoad(unittest.TestCase):
+    def test_cycling_counts_in_aerobic_not_run_volume(self):
+        acts = [Activity("2026-09-08", 3600, 10000, 40, "Run"),
+                Activity("2026-09-10", 7200, 40000, 300, "GravelRide")]
+        hist = [Activity("2026-08-18", 3600, 10000, 0, "Run"),
+                Activity("2026-08-25", 7200, 40000, 0, "GravelRide"),
+                Activity("2026-09-01", 3600, 10000, 0, "Run")]
+        s = strava.summarize_week(acts, 3600, history_acts=hist, history_weeks=3,
+                                  cross_weight=0.5)
+        self.assertEqual(s.n_runs, 1)                 # le vélo n'entre pas dans le volume course
+        self.assertAlmostEqual(s.actual_hours, 1.0)   # course seule
+        self.assertAlmostEqual(s.cross_hours, 2.0)    # 2 h de vélo
+        self.assertAlmostEqual(s.aerobic_acute_hours, 1.0 + 0.5 * 2.0)  # 2.0 h équiv.
+        self.assertIsNotNone(s.aerobic_chronic_hours)
+        self.assertGreater(s.aerobic_acwr, 0)
+
+    def test_weight_zero_ignores_cross(self):
+        acts = [Activity("2026-09-08", 3600, 10000, 40, "Run"),
+                Activity("2026-09-10", 7200, 40000, 300, "Ride")]
+        s = strava.summarize_week(acts, 3600, cross_weight=0.0)
+        self.assertAlmostEqual(s.aerobic_acute_hours, s.actual_hours)
+
+
 class TestWeeklyActuals(unittest.TestCase):
     def test_buckets(self):
         acts = strava.load_activities_file(

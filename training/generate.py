@@ -346,7 +346,8 @@ def cmd_config(args):
     c = config.summary()
     print("Profil athlète (mémoire intersessions) :")
     for k in ("objective", "race_date", "plan_start", "plan_weeks",
-              "days_per_week", "start_volume_h", "peak_volume_h"):
+              "days_per_week", "start_volume_h", "peak_volume_h",
+              "cross_training_weight"):
         print(f"  {k:16} {c[k]}")
     print(f"  {'paces surchargées':16} {', '.join(c['paces_overridden']) or '(aucune)'}")
     print(f"  {'fichier':16} {c['config_path']}")

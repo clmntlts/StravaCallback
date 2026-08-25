@@ -111,6 +111,13 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
                 "Pas de données Strava cette semaine.",
                 ["Impossible d'analyser : aucune activité reçue."],
                 [], ["Vérifie la synchro Strava pour un debrief la semaine prochaine."])
+        if summary.cross_hours > 0:
+            return CoachAnalysis(
+                "Pas de course, mais du cross-training.",
+                [f"Aucune course, mais {summary.cross_hours:.1f} h de cross-training "
+                 f"(vélo, etc.) : base aérobie entretenue."],
+                [], ["Ajoute 1-2 courses faciles : l'endurance portée (impact au sol) "
+                     "ne se travaille qu'en courant, même avec une grosse caisse vélo."])
         return CoachAnalysis(
             "Semaine sans course enregistrée.",
             ["Aucune sortie détectée sur la semaine."],
@@ -131,6 +138,11 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
                    f"({total_km:.0f} km), soit {adh:.0%} du prévu.")
     else:
         obs.append(f"Volume : {summary.actual_hours:.1f} h sur {n} sorties ({total_km:.0f} km).")
+
+    # --- Base aérobie / cross-training ----------------------------------- #
+    if summary.cross_hours > 0:
+        obs.append(f"Base aérobie : +{summary.cross_hours:.1f} h de cross-training "
+                   f"(vélo, etc.) — comptée dans la charge, pas dans le volume course.")
 
     # --- Poids de la sortie longue --------------------------------------- #
     if longest_s > 0:
@@ -191,9 +203,11 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
         obs.append(f"Efficacité aérobie (allure/FC) : {ef_now:.2f} "
                    f"(plus c'est haut, mieux c'est).")
 
-    # --- ACWR ------------------------------------------------------------ #
-    if summary.acwr is not None:
-        obs.append(f"Charge aiguë/chronique (ACWR) : {summary.acwr:.2f}.")
+    # --- ACWR (charge aérobie totale : course + cross-training) ---------- #
+    acwr = summary.aerobic_acwr
+    if acwr is not None:
+        src = "course + cross-training" if summary.cross_hours > 0 else "course"
+        obs.append(f"Charge aiguë/chronique (ACWR, {src}) : {acwr:.2f}.")
 
     # --- TENDANCES sur ~4 semaines --------------------------------------- #
     hist = [w for w in (history_runs or []) if w]
@@ -223,7 +237,7 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
 
     # --- Recommandations transverses (priorité) -------------------------- #
     front: List[str] = []
-    if summary.acwr is not None and summary.acwr > 1.3:
+    if acwr is not None and acwr > 1.3:
         front.append("Charge en hausse rapide (ACWR élevé) : semaine à venir plus "
                      "prudente pour éviter la blessure.")
     if fast_share_excl > 0.35:   # excès hors séance qualité présumée → vraiment trop vite
@@ -258,9 +272,9 @@ def _trend_line(label: str, now: float, base: float, unit: str) -> str:
 def _headline(adh, long_share, fast_share, summary: WeekSummary) -> str:
     if not summary.n_runs:
         return "Semaine sans course."
-    if adh < 0.6:
+    if adh < 0.6 and summary.cross_hours <= 0:
         return "Semaine légère — on repart sur la régularité."
-    if summary.acwr is not None and summary.acwr > 1.3:
+    if summary.aerobic_acwr is not None and summary.aerobic_acwr > 1.3:
         return "Bonne charge, mais attention à la fatigue qui monte."
     if fast_share > 0.35:
         return "Bon travail — mais tu cours globalement trop vite pour de l'ultra."

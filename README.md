@@ -135,6 +135,7 @@ Ce que chaque paramètre pilote :
 | `plan_start` / `plan_weeks` | **Durée du plan variable** : la périodisation est **compressée** pour tenir dans le temps disponible (phases préservées, affûtage intact). |
 | `days_per_week` | 3 jours → qualité + sortie longue + back-to-back ; 4 → + un jour facile. |
 | `start_volume_h` | **Échelle de volume** : la semaine 1 colle au volume réel de départ, le reste monte proportionnellement. |
+| `cross_training_weight` | Poids d'une heure de vélo/cross-training dans la **charge aérobie** (défaut 0,5). Compte pour l'ACWR et l'anti-régression, jamais dans le volume course prescrit. |
 | `paces` | Cibles d'allure encodées dans les `.FIT`. |
 
 Précédence : **variables d'environnement** > `athlete.json` > valeurs par défaut.
@@ -195,6 +196,21 @@ précédente, puis choisit une **bande** :
 | > 115 % | `vigilance` | Léger frein (× 0,95), pas de sur-dose. |
 | 0 sortie alors qu'il y avait du prévu | `verifier` | On tient le nominal + on **signale** (probable trou de synchro, pas une vraie régression). |
 | Aucune donnée fournie | `nominal` | Plan **non adapté**, signalé comme tel. |
+
+### Charge multi-sport (course **et** vélo/cross-training)
+
+Le moteur raisonne sur **deux charges en parallèle** :
+
+- **Volume course** (spécifique) → pilote les séances prescrites et le **plafond
+  de la sortie longue**. Reste **course seule** : une grosse caisse vélo n'autorise
+  pas un saut de volume *course* (l'impact au sol est spécifique et se construit
+  en courant).
+- **Charge aérobie totale** = course + cross-training pondéré (vélo, rameur, ski…
+  au poids `cross_training_weight`, défaut **0,5**). Elle nourrit l'**ACWR de
+  fatigue** et un **garde-fou anti-régression** : si tu as entretenu la base à
+  vélo, le plan **ne te fait pas régresser** sous prétexte d'une semaine à faible
+  kilométrage course — mais un gros bloc vélo fait bien **monter l'ACWR** (et donc
+  déclencher le frein de fatigue si besoin).
 
 Garde-fous, toujours actifs (hors décharge) :
 
@@ -361,6 +377,7 @@ génération du dashboard.
 
 Configuration du plan (surchargent `athlete.json`) :
 `RACE_DATE`, `PLAN_START`, `PLAN_WEEKS`, `DAYS_PER_WEEK`, `START_VOLUME_H`,
+`CROSS_TRAINING_WEIGHT` (poids du cross-training dans la charge aérobie, défaut 0,5),
 `PROGRAM_START`, `ATHLETE_CONFIG` (chemin d'un autre profil).
 
 Accès Strava (lecture des activités) :

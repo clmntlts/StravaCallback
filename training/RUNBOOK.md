@@ -59,6 +59,7 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GMAIL_APP_PASSWORD` | Mot de passe d'application Google (2FA requise) |
 | `MAIL_TO` | Destinataire (défaut : `GMAIL_ADDRESS`) |
 | `PROGRAM_START` | *(optionnel)* Lundi de la semaine 1 (`YYYY-MM-DD`) pour aligner le calendrier |
+| `CROSS_TRAINING_WEIGHT` | *(optionnel)* Poids du cross-training (vélo…) dans la charge aérobie, défaut 0.5 |
 | `GARMIN_CONSUMER_KEY` | *(push Garmin)* client id de l'app Garmin (Developer Program) |
 | `GARMIN_CONSUMER_SECRET` | *(push Garmin)* client secret |
 | `GARMIN_REFRESH_TOKEN` | *(push Garmin)* token utilisateur (après consentement, voir ci-dessous) |

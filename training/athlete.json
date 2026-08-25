@@ -14,6 +14,9 @@
   "start_volume_h": null,
   "peak_volume_h": null,
 
+  "_comment_cross": "Poids d'une heure de cross-training (vélo, rameur, ski…) dans la charge AÉROBIE, relatif à une heure de course. 0.5 par défaut. Compte pour la base/ACWR et empêche une fausse régression ; ne gonfle jamais le volume COURSE prescrit (l'impact au sol reste spécifique).",
+  "cross_training_weight": 0.5,
+
   "paces": {
     "recovery": "6:45",
     "easy": "6:15",
