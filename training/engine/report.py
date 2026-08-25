@@ -68,9 +68,15 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=No
     else:
         L.append("_Pas de données de semaine précédente (début de programme)._")
 
-    L.append("\n## Import Garmin\n")
-    L.append("Garmin Connect → Entraînement → Entraînements → **Importer** les "
-             "fichiers `.fit` de ce dossier, puis planifie-les sur les bons jours.")
+    L.append("\n## Charger les séances sur la montre\n")
+    L.append("⚠️ Les `.fit` de séance **ne s'importent pas** dans Garmin Connect "
+             "(l'upload n'accepte que des *activités* terminées). Deux options :\n"
+             "- **Copie USB** : brancher la montre, copier les `.fit` dans "
+             "`GARMIN/NEWFILES` → ils apparaissent dans *Mes séances* "
+             "(bibliothèque seulement, **pas** à une date).\n"
+             "- **Planification à date fixe** (séance du jour) : "
+             "`generate.py send --push-connect` (calendrier Garmin Connect) ou "
+             "`--push-garmin` (Training API officielle).")
     return "\n".join(L) + "\n"
 
 
