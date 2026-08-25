@@ -314,6 +314,58 @@ class TestOnboard(unittest.TestCase):
             cfg.CONFIG_PATH = old
             os.unlink(path)
 
+    def test_onboard_derives_paces_and_extras(self):
+        import json
+        import tempfile
+        from argparse import Namespace
+        import generate
+        from engine import config as cfg
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            tf.write("{}")
+            path = tf.name
+        old = cfg.CONFIG_PATH
+        try:
+            cfg.CONFIG_PATH = path
+            generate.cmd_onboard(Namespace(
+                objective="18-24 yards", race_date="2027-04-24", plan_start=None,
+                plan_weeks=None, days=4, start_volume=3.0, peak_volume=None,
+                longest_run=90, cross_weight=0.7,
+                ref_distance="10k", ref_time="44:00"))
+            data = json.load(open(path))
+            self.assertEqual(data["longest_run_min"], 90)
+            self.assertEqual(data["cross_training_weight"], 0.7)
+            self.assertIn("paces", data)
+            self.assertIn("tempo", data["paces"])      # allures dérivées présentes
+            self.assertTrue(data["onboarded"])
+        finally:
+            cfg.CONFIG_PATH = old
+            os.unlink(path)
+
+
+class TestPaceDerivation(unittest.TestCase):
+    def test_derive_paces_from_10k(self):
+        from engine import workouts
+        p = workouts.derive_paces(10000, 44 * 60)   # 10 km en 44:00
+        for k in ("recovery", "easy", "long", "yard", "steady", "tempo", "cruise"):
+            self.assertIn(k, p)
+        s = {k: workouts._pace_seconds(v) for k, v in p.items()}
+        # ordre logique : cruise (rapide) < tempo < steady < easy < long < recovery
+        self.assertLess(s["cruise"], s["tempo"])
+        self.assertLess(s["tempo"], s["steady"])
+        self.assertLess(s["steady"], s["easy"])
+        self.assertLess(s["easy"], s["long"])
+        self.assertLess(s["long"], s["recovery"])
+        # seuil plausible pour un 10k en 44:00 (~4:20-4:45/km)
+        self.assertTrue(260 <= s["tempo"] <= 285)
+
+    def test_distance_and_time_parsers(self):
+        import generate
+        self.assertEqual(generate._parse_time_to_seconds("44:00"), 2640)
+        self.assertEqual(generate._parse_time_to_seconds("1:30:00"), 5400)
+        self.assertEqual(generate._parse_distance_to_m("10k"), 10000)
+        self.assertEqual(generate._parse_distance_to_m("21.1km"), 21100)
+        self.assertEqual(generate._parse_distance_to_m("5000m"), 5000)
+
 
 class TestGarminConfig(unittest.TestCase):
     def test_not_configured_without_env(self):

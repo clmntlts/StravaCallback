@@ -90,9 +90,12 @@ s'exécute automatiquement.
 
 **Onboarding au premier démarrage** : tant que le profil n'a pas été personnalisé
 (`"onboarded": false`), le hook demande à l'assistant de **poser quelques questions**
-(objectif, date de course, jours par semaine, volume hebdo actuel) puis d'écrire
-lui-même `athlete.json` via `generate.py onboard` — **aucun fichier à éditer à la
-main**. L'onboarding ne se déclenche qu'en session interactive, jamais dans un run
+puis d'écrire lui-même `athlete.json` via `generate.py onboard` — **aucun fichier à
+éditer à la main**. Les questions couvrent le besoin du coureur : objectif, date de
+course, jours/semaine, volume hebdo actuel, **plus longue sortie récente**,
+**importance du cross-training** (vélo → poids dans la charge aérobie) et une
+**perf de référence** (ex. 10k en 44:00) pour **caler automatiquement les allures**.
+L'onboarding ne se déclenche qu'en session interactive, jamais dans un run
 automatique planifié.
 
 ### Obtenir un token Strava (une fois, sans service externe)
@@ -135,8 +138,9 @@ Ce que chaque paramètre pilote :
 | `plan_start` / `plan_weeks` | **Durée du plan variable** : la périodisation est **compressée** pour tenir dans le temps disponible (phases préservées, affûtage intact). |
 | `days_per_week` | 3 jours → qualité + sortie longue + back-to-back ; 4 → + un jour facile. |
 | `start_volume_h` | **Échelle de volume** : la semaine 1 colle au volume réel de départ, le reste monte proportionnellement. |
+| `longest_run_min` | Plus longue sortie course récente (min) : **plancher** du plafond de la sortie longue tant que Strava n'a pas mieux (évite une 1ʳᵉ longue surdimensionnée). |
 | `cross_training_weight` | Poids d'une heure de vélo/cross-training dans la **charge aérobie** (défaut 0,5). Compte pour l'ACWR et l'anti-régression, jamais dans le volume course prescrit. |
-| `paces` | Cibles d'allure encodées dans les `.FIT`. |
+| `paces` | Cibles d'allure encodées dans les `.FIT`. Peuvent être **calculées à l'onboarding** depuis une perf de référence (`--ref-distance` + `--ref-time`, ex. 10k en 44:00). |
 
 Précédence : **variables d'environnement** > `athlete.json` > valeurs par défaut.
 On édite le fichier, on l'inspecte avec `python3 generate.py config`, et la

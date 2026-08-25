@@ -51,14 +51,24 @@ if [ "${ONB:-1}" = "0" ]; then
 >>> ONBOARDING REQUIS — profil athlète non personnalisé (athlete.json) <<<
 Instruction pour Claude : si cette session est INTERACTIVE (un humain peut
 répondre) ET qu'aucune tâche précise n'est déjà demandée dans ce tour, lance
-l'onboarding AVANT toute autre action :
-  1. Pose les questions à l'utilisateur (question à choix) : objectif (ex.
-     12 / 18 / 24 yards ou "dernier debout"), date de course, jours/semaine
-     (3 ou 4), et volume de course hebdo actuel (en heures).
-  2. Écris ses réponses (ne lui demande pas d'éditer un fichier) :
-       python3 training/generate.py onboard --objective "<obj>" --race-date <YYYY-MM-DD> --days <N> --start-volume <H>
-     (options possibles : --plan-start, --plan-weeks, --peak-volume)
-  3. Confirme le plan dérivé : python3 training/generate.py config
+l'onboarding AVANT toute autre action. Pose les questions (à choix quand possible,
+en un ou deux tours groupés — ne noie pas l'utilisateur). Couvre bien le besoin
+du coureur :
+  1. Objectif visé (ex. 12 / 18 / 24 yards, ou « dernier debout »).
+  2. Date de la course (YYYY-MM-DD).
+  3. Jours de course par semaine (3 ou 4).
+  4. Volume de course hebdo ACTUEL (heures/sem).
+  5. Plus longue sortie course récente (minutes) — cadre la montée en charge.
+  6. Cross-training (vélo, etc.) : peu / modéré / beaucoup
+     → poids charge aérobie 0.3 / 0.5 / 0.7 (--cross-weight).
+  7. Perf récente de référence pour caler les allures (distance + temps,
+     ex. 10k en 44:00) — optionnel mais recommandé.
+Puis ÉCRIS ses réponses (ne lui demande pas d'éditer un fichier) :
+   python3 training/generate.py onboard --objective "<obj>" --race-date <YYYY-MM-DD> \
+     --days <N> --start-volume <H> --longest-run <MIN> --cross-weight <0-1> \
+     --ref-distance <ex. 10k> --ref-time <ex. 44:00>
+   (options aussi : --plan-start, --plan-weeks, --peak-volume)
+Enfin, confirme le plan dérivé : python3 training/generate.py config
 NE PAS lancer l'onboarding dans un run automatique/planifié (aucun humain) :
 dans ce cas, exécute la tâche demandée et ignore ce bloc.
 ONBOARD

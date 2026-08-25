@@ -27,6 +27,9 @@ _DEFAULTS = {
     "days_per_week": 4,
     "start_volume_h": None,
     "peak_volume_h": None,
+    # Plus longue sortie COURSE récente (minutes) déclarée à l'onboarding : sert
+    # de plancher au plafond de la sortie longue tant que Strava n'a pas mieux.
+    "longest_run_min": None,
     # Poids d'une heure de cross-training (vélo, rameur…) dans la charge AÉROBIE,
     # relativement à une heure de course. 0.5 = une heure de vélo « vaut » une
     # demi-heure de course pour la base/ACWR (course non-portée vs portée). La
@@ -94,6 +97,7 @@ PLAN_WEEKS: Optional[int] = _parse_int(_cfg["plan_weeks"])
 DAYS_PER_WEEK: int = max(3, min(4, _parse_int(_cfg["days_per_week"]) or 4))
 START_VOLUME_H: Optional[float] = _parse_float(_cfg["start_volume_h"])
 PEAK_VOLUME_H: Optional[float] = _parse_float(_cfg["peak_volume_h"])
+LONGEST_RUN_MIN: Optional[float] = _parse_float(_cfg["longest_run_min"])
 # Poids du cross-training dans la charge aérobie ; borné [0, 1].
 CROSS_TRAINING_WEIGHT: float = max(0.0, min(1.0,
     _parse_float(_cfg["cross_training_weight"]) if _cfg["cross_training_weight"] is not None else 0.5))
@@ -109,6 +113,7 @@ def summary() -> Dict:
         "days_per_week": DAYS_PER_WEEK,
         "start_volume_h": START_VOLUME_H,
         "peak_volume_h": PEAK_VOLUME_H,
+        "longest_run_min": LONGEST_RUN_MIN,
         "cross_training_weight": CROSS_TRAINING_WEIGHT,
         "paces_overridden": sorted(PACES.keys()),
         "config_path": CONFIG_PATH,

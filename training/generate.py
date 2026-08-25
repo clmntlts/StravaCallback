@@ -94,6 +94,10 @@ def _prepare_week(week_index, acts, today):
         # plus longue sortie sur les 3 dernières semaines (plafond long anti-saut)
         last.rolling_longest_s = max(
             (a.moving_time_s for wk in weeks[:3] for a in wk), default=0)
+    # Plancher issu de l'onboarding tant que Strava n'a pas de longue récente :
+    # évite une première sortie longue surdimensionnée.
+    if last.rolling_longest_s == 0 and config.LONGEST_RUN_MIN:
+        last.rolling_longest_s = int(config.LONGEST_RUN_MIN * 60)
     res = adapt.adapt_week(planned, last)
     ws = program.upcoming_monday(today) - timedelta(days=7)
     analysis = coach.analyze(last, week_runs, history_runs, week_start=ws)
@@ -265,9 +269,32 @@ def _write_profile(updates: dict) -> str:
     return path
 
 
+def _parse_time_to_seconds(t: str) -> int:
+    """"44:00" (mm:ss) ou "1:30:00" (h:mm:ss) -> secondes."""
+    parts = [int(x) for x in str(t).split(":")]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    raise SystemExit("Format de temps invalide (attendu mm:ss ou h:mm:ss).")
+
+
+def _parse_distance_to_m(d: str) -> float:
+    """"10", "10k", "10km", "21.1k", "42.195km", "5000m" -> mètres."""
+    s = str(d).strip().lower().replace(",", ".")
+    if s.endswith("km"):
+        return float(s[:-2]) * 1000
+    if s.endswith("m") and not s.endswith("km"):
+        return float(s[:-1])
+    if s.endswith("k"):
+        return float(s[:-1]) * 1000
+    val = float(s)
+    return val * 1000 if val < 100 else val  # <100 = km, sinon déjà en mètres
+
+
 def cmd_onboard(args):
     """Écrit le profil athlète (appelé après les questions d'onboarding)."""
-    path = _write_profile({
+    updates = {
         "objective": args.objective,
         "race_date": args.race_date,
         "plan_start": args.plan_start,
@@ -275,7 +302,17 @@ def cmd_onboard(args):
         "days_per_week": args.days,
         "start_volume_h": args.start_volume,
         "peak_volume_h": args.peak_volume,
-    })
+        "longest_run_min": args.longest_run,
+        "cross_training_weight": args.cross_weight,
+    }
+    # Allures personnalisées depuis une perf de référence (optionnel).
+    if args.ref_distance and args.ref_time:
+        dist_m = _parse_distance_to_m(args.ref_distance)
+        time_s = _parse_time_to_seconds(args.ref_time)
+        updates["paces"] = workouts.derive_paces(dist_m, time_s)
+        print(f"Allures calées sur {args.ref_distance} en {args.ref_time} : "
+              + ", ".join(f"{k} {v}" for k, v in updates["paces"].items()))
+    path = _write_profile(updates)
     print(f"Profil écrit dans {path} (onboarded=true).")
     print("Vérifie le plan dérivé : python3 generate.py config")
 
@@ -368,8 +405,8 @@ def cmd_config(args):
     print("Profil athlète (mémoire intersessions) :")
     for k in ("objective", "race_date", "plan_start", "plan_weeks",
               "days_per_week", "start_volume_h", "peak_volume_h",
-              "cross_training_weight"):
-        print(f"  {k:16} {c[k]}")
+              "longest_run_min", "cross_training_weight"):
+        print(f"  {k:18} {c[k]}")
     print(f"  {'paces surchargées':16} {', '.join(c['paces_overridden']) or '(aucune)'}")
     print(f"  {'fichier':16} {c['config_path']}")
     print("\nDérivé :")
@@ -424,6 +461,14 @@ def main(argv=None):
     po.add_argument("--days", dest="days", type=int)
     po.add_argument("--start-volume", dest="start_volume", type=float, help="volume hebdo de départ (h)")
     po.add_argument("--peak-volume", dest="peak_volume", type=float)
+    po.add_argument("--longest-run", dest="longest_run", type=float,
+                    help="plus longue sortie course récente (minutes)")
+    po.add_argument("--cross-weight", dest="cross_weight", type=float,
+                    help="poids du cross-training dans la charge aérobie (0-1, ex. 0.5)")
+    po.add_argument("--ref-distance", dest="ref_distance",
+                    help="perf de référence : distance (ex. 10k, 21.1km, 5000m)")
+    po.add_argument("--ref-time", dest="ref_time",
+                    help="perf de référence : temps (mm:ss ou h:mm:ss) → cale les allures")
     po.set_defaults(func=cmd_onboard)
 
     sub.add_parser("strava-auth-url",

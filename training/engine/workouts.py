@@ -46,6 +46,40 @@ def _pace_seconds(pace: str) -> int:
     return int(m) * 60 + int(s)
 
 
+def _fmt_pace(sec_per_km: float) -> str:
+    m, s = divmod(int(round(sec_per_km)), 60)
+    return f"{m}:{s:02d}"
+
+
+# Décalages d'allure (s/km) par rapport au SEUIL, calibrés « ultra » (endurance
+# volontairement contenue). Personnalisables ensuite dans athlete.json.
+_PACE_OFFSETS = {
+    "cruise": -12,    # ~5-10 km : un cran plus vif que le seuil
+    "tempo": 0,       # seuil
+    "steady": +25,    # tempo soutenu / allure spécifique
+    "yard": +75,      # allure de boucle backyard (facile-soutenu)
+    "easy": +80,      # endurance fondamentale
+    "long": +90,      # sortie longue (conservateur)
+    "recovery": +110,  # récupération
+}
+
+
+def derive_paces(distance_m: float, time_s: float) -> Dict[str, str]:
+    """Estime les 7 allures d'entraînement depuis une perf de référence.
+
+    Méthode : allure au SEUIL estimée en projetant la perf sur un effort de
+    ~60 min (modèle de Riegel, exposant 1.06), puis décalages par zone.
+    Renvoie un dict {clé: "m:ss"} directement injectable dans `paces`.
+    """
+    d_km = distance_m / 1000.0
+    if d_km <= 0 or time_s <= 0:
+        raise ValueError("distance et temps de référence doivent être > 0")
+    # distance couverte en 3600 s au même niveau -> son allure = seuil
+    d_hour = d_km * (3600.0 / time_s) ** (1 / 1.06)
+    threshold = 3600.0 / d_hour  # s/km
+    return {k: _fmt_pace(threshold + off) for k, off in _PACE_OFFSETS.items()}
+
+
 def _mm_s(pace_seconds: int) -> int:
     return round(1_000_000 / pace_seconds)
 
