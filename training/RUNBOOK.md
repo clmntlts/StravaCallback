@@ -67,6 +67,7 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
 | `GARMIN_EMAIL` | *(push Connect non-officiel)* identifiant du compte Garmin Connect |
 | `GARMIN_PASSWORD` | *(push Connect non-officiel)* mot de passe du compte |
+| `GARMIN_TOKENS_BASE64` | *(auto cloud)* jeton de session base64 (via `garmin-connect-token`) — évite le re-login |
 | `GARMIN_TOKENSTORE` | *(option)* dossier des jetons Connect (défaut `~/.garminconnect`) |
 
 - Jeton Strava : créer une app sur https://www.strava.com/settings/api, puis
@@ -116,15 +117,32 @@ du moteur reste *stdlib-only* (import paresseux de la lib, uniquement au login).
 ```bash
 pip install garminconnect
 export GARMIN_EMAIL=…  GARMIN_PASSWORD=…
-python3 generate.py garmin-connect-login          # login + stockage des jetons (MFA incluse), une fois
+python3 generate.py garmin-connect-login          # login + stockage des jetons, une fois
 python3 generate.py send --live --push-connect    # upload + planification des 4 séances
 ```
 
+### Full-auto (Routine cloud, sans machine ni MFA) : jeton en variable
+
+L'environnement cloud est **éphémère** : le dossier de jetons (`~/.garminconnect`)
+est effacé entre les runs. Pour que la Routine se connecte **sans re-login**
+(et sans MFA interactive), on stocke le **jeton de session en base64** dans une
+variable d'environnement :
+
+```bash
+# 1) une fois (ici ou en local), récupère le jeton :
+python3 generate.py garmin-connect-token          # imprime le base64
+# 2) colle-le dans l'environnement cloud :  GARMIN_TOKENS_BASE64=<le base64>
+# 3) la Routine peut désormais planifier toute seule (plus besoin d'e-mail/mdp) :
+python3 generate.py send --live --push-connect
+```
+
+`login()` essaie d'abord `GARMIN_TOKENS_BASE64` (repli sur e-mail+mot de passe).
+Le jeton est un **secret** (accès au compte) : ne le committe pas ; régénère-le
+avec `garmin-connect-token` si Garmin invalide la session.
+
 > ⚠️ Le schéma JSON du service `/workout-service` est dans
 > `engine/garmin_connect.py`. Le traducteur est couvert par les tests ; l'upload
-> réel demande ton compte Garmin. Pour un run **automatique/planifié** (Routine
-> hebdo, sans humain), lance `garmin-connect-login` **une fois** au préalable :
-> les jetons du tokenstore évitent de repasser la MFA.
+> réel demande ton compte Garmin.
 
 ## Alternative connecteurs
 

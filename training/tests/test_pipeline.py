@@ -179,9 +179,18 @@ class TestGarminConnectTranslate(unittest.TestCase):
         self.assertIn("distance", conds)   # la boucle backyard est à distance fixe
 
     def test_not_configured_without_env(self):
-        for k in ("GARMIN_EMAIL", "GARMIN_PASSWORD"):
+        for k in ("GARMIN_EMAIL", "GARMIN_PASSWORD", "GARMIN_TOKENS_BASE64"):
             os.environ.pop(k, None)
         self.assertFalse(garmin_connect.is_configured())
+
+    def test_configured_via_token_only(self):
+        for k in ("GARMIN_EMAIL", "GARMIN_PASSWORD"):
+            os.environ.pop(k, None)
+        os.environ["GARMIN_TOKENS_BASE64"] = "dummy-token"
+        try:
+            self.assertTrue(garmin_connect.is_configured())  # jeton seul suffit
+        finally:
+            os.environ.pop("GARMIN_TOKENS_BASE64", None)
 
 
 class TestCoach(unittest.TestCase):

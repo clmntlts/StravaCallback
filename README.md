@@ -276,8 +276,16 @@ d'une API rétro-ingénierée qui peut casser si Garmin change son service.
 ```bash
 pip install garminconnect                    # dépendance optionnelle
 export GARMIN_EMAIL=…  GARMIN_PASSWORD=…      # compte Garmin Connect
-python3 generate.py garmin-connect-login      # login une fois (stocke les jetons, MFA incluse)
+python3 generate.py garmin-connect-login      # login une fois (stocke les jetons)
 python3 generate.py send --live --push-connect
+```
+
+Pour l'**automatique en cloud** (session éphémère, sans re-login ni MFA), récupère
+le jeton de session et stocke-le en variable d'environnement :
+
+```bash
+python3 generate.py garmin-connect-token      # imprime le jeton base64
+# -> colle-le dans GARMIN_TOKENS_BASE64 (secret) ; la Routine se connecte seule
 ```
 
 **Garmin (API officielle Training API)** — optionnel, `--push-garmin` :
@@ -392,7 +400,8 @@ Push Garmin — Training API officielle (optionnel) :
 
 Push Garmin — Connect non-officiel (optionnel, `--push-connect`, requiert
 `pip install garminconnect`) :
-`GARMIN_EMAIL`, `GARMIN_PASSWORD`, `GARMIN_TOKENSTORE` *(option, défaut `~/.garminconnect`)*.
+`GARMIN_EMAIL`, `GARMIN_PASSWORD`, `GARMIN_TOKENS_BASE64` *(recommandé pour l'auto
+cloud : jeton de session, évite le re-login)*, `GARMIN_TOKENSTORE` *(option, défaut `~/.garminconnect`)*.
 
 Les secrets ne sont **jamais** committés : ils vivent dans l'environnement
 d'exécution.

@@ -340,6 +340,27 @@ def cmd_garmin_connect_login(args):
     print(f"✓ Connecté à Garmin Connect en tant que {name}.")
     print(f"  Jetons stockés dans {store} — les prochains runs les réutiliseront.")
     print("  Planifie une semaine : python3 generate.py send --live --push-connect")
+    print("  Pour l'automatique cloud (jeton en variable) : python3 generate.py garmin-connect-token")
+
+
+def cmd_garmin_connect_token(args):
+    """Imprime le jeton de session en base64, à coller dans GARMIN_TOKENS_BASE64.
+
+    Permet à la Routine automatique (environnement éphémère) de se connecter SANS
+    re-login ni MFA. À régénérer si Garmin invalide la session.
+    """
+    if not garmin_connect.is_configured():
+        raise SystemExit("Définis GARMIN_EMAIL et GARMIN_PASSWORD (variables d'env).")
+    try:
+        client = garmin_connect.login()
+        token = garmin_connect.dump_token_base64(client)
+    except Exception as e:
+        raise SystemExit(f"Échec : {e}\nInstalle la lib si besoin : pip install garminconnect")
+    print("Jeton de session Garmin (base64) — colle-le dans la variable "
+          "d'environnement GARMIN_TOKENS_BASE64 :\n")
+    print(token)
+    print("\n⚠️  C'est un secret d'accès à ton compte : ne le committe pas, "
+          "traite-le comme un mot de passe.")
 
 
 def cmd_config(args):
@@ -425,6 +446,9 @@ def main(argv=None):
     sub.add_parser("garmin-connect-login",
                    help="Login Garmin Connect (voie non-officielle) : stocke les jetons"
                    ).set_defaults(func=cmd_garmin_connect_login)
+    sub.add_parser("garmin-connect-token",
+                   help="Imprime le jeton de session base64 (→ GARMIN_TOKENS_BASE64, auto cloud)"
+                   ).set_defaults(func=cmd_garmin_connect_token)
 
     args = p.parse_args(argv)
     args.func(args)

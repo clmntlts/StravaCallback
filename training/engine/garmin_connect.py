@@ -26,10 +26,15 @@ upload échoue, vérifier la version de `garminconnect` et les endpoints
 `/workout-service/*`.
 
 Variables d'environnement :
-    GARMIN_EMAIL        identifiant du compte Garmin Connect
-    GARMIN_PASSWORD     mot de passe du compte
-    GARMIN_TOKENSTORE   (option) dossier des jetons (défaut ~/.garminconnect) —
-                        évite de se relogger (et de repasser la MFA) à chaque run
+    GARMIN_EMAIL          identifiant du compte Garmin Connect
+    GARMIN_PASSWORD       mot de passe du compte
+    GARMIN_TOKENS_BASE64  (option, RECOMMANDÉ pour l'automatique cloud) jeton de
+                          session encodé base64 — évite de se relogger à chaque
+                          run (Garmin limite les logins répétés) et fonctionne
+                          dans un environnement éphémère (pas de dossier persistant).
+                          L'obtenir une fois : `generate.py garmin-connect-token`.
+    GARMIN_TOKENSTORE     (option) dossier des jetons (défaut ~/.garminconnect),
+                          utilisé en local/persistant si pas de jeton base64.
 """
 
 from __future__ import annotations
@@ -162,34 +167,66 @@ def session_to_connect(spec: SessionSpec) -> Dict:
 # Accès réseau (lib externe, import paresseux)
 # --------------------------------------------------------------------------- #
 def is_configured() -> bool:
-    return bool(os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD"))
+    """Vrai si de quoi ouvrir une session : jeton base64 OU e-mail+mot de passe."""
+    return bool(os.environ.get("GARMIN_TOKENS_BASE64")
+                or (os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD")))
 
 
-def login():
-    """Ouvre une session Garmin Connect (réutilise les jetons si présents).
-
-    Import paresseux de `garminconnect` : absente, on lève une RuntimeError
-    explicite (le reste du moteur n'en dépend pas).
-    """
+def _import_garmin():
     try:
         from garminconnect import Garmin  # dépendance externe optionnelle
     except ImportError as e:
         raise RuntimeError(
             "Lib 'garminconnect' absente. Installe-la : pip install garminconnect"
         ) from e
+    return Garmin
 
+
+def login():
+    """Ouvre une session Garmin Connect.
+
+    Ordre de préférence (du plus robuste au plus interactif) :
+      1. `GARMIN_TOKENS_BASE64` : restaure une session déjà authentifiée SANS
+         mot de passe ni MFA — idéal pour l'automatique en environnement éphémère.
+      2. e-mail + mot de passe (+ dossier de jetons persistant si dispo) : login
+         complet ; nécessite de franchir la MFA au 1er login si elle est active.
+
+    Import paresseux de `garminconnect` (le reste du moteur n'en dépend pas).
+    """
+    Garmin = _import_garmin()
+
+    # 1) Jeton de session en variable d'environnement (sans mot de passe).
+    token_b64 = os.environ.get("GARMIN_TOKENS_BASE64")
+    if token_b64:
+        client = Garmin()
+        try:
+            client.garth.loads(token_b64)      # restaure la session depuis le jeton
+            client.get_full_name()             # vérifie que le jeton est valide
+            return client
+        except Exception as e:
+            if not (os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD")):
+                raise RuntimeError(
+                    "GARMIN_TOKENS_BASE64 invalide/expiré et pas d'identifiants de "
+                    "repli. Régénère-le : generate.py garmin-connect-token") from e
+            # sinon on retombe sur le login complet ci-dessous
+
+    # 2) Login e-mail + mot de passe (dossier de jetons persistant si présent).
     email = os.environ.get("GARMIN_EMAIL")
     password = os.environ.get("GARMIN_PASSWORD")
     if not (email and password):
         raise RuntimeError("GARMIN_EMAIL / GARMIN_PASSWORD manquants (variables d'env).")
-
     store = os.path.expanduser(os.environ.get("GARMIN_TOKENSTORE", "~/.garminconnect"))
     client = Garmin(email, password)
     try:
-        client.login(store)          # réutilise les jetons stockés si valides
+        client.login(store)          # réutilise/écrit les jetons du dossier si possible
     except TypeError:
         client.login()               # anciennes versions sans tokenstore
     return client
+
+
+def dump_token_base64(client) -> str:
+    """Sérialise la session courante en base64 (à stocker dans GARMIN_TOKENS_BASE64)."""
+    return client.garth.dumps()
 
 
 def upload_workout(client, payload: Dict) -> str:
