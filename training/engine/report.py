@@ -185,12 +185,33 @@ def plan_data_json() -> list:
     return rows
 
 
+_MONTHS_FR = ["", "janv.", "févr.", "mars", "avr.", "mai", "juin",
+              "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+
+def plan_meta_json() -> dict:
+    """En-tête du plan piloté par le profil (objectif, jours, saison) — évite le
+    texte codé en dur qui devient faux quand le profil change."""
+    from . import config
+    start, race = program.PROGRAM_START, program.race_date()
+    return {
+        "objective": config.OBJECTIVE,
+        "days": config.DAYS_PER_WEEK,
+        "weeks": program.N_WEEKS,
+        "season": f"{_MONTHS_FR[start.month]} → {_MONTHS_FR[race.month]}",
+    }
+
+
 def update_plan_html(path: str) -> None:
-    """Réinjecte les données du programme dans le tableau `const DATA = ...`."""
+    """Réinjecte les données du programme (`const DATA`) et l'en-tête piloté par
+    le profil (`const META`) dans le HTML du plan."""
     with open(path, encoding="utf-8") as f:
         html = f.read()
-    data = json.dumps(plan_data_json(), ensure_ascii=False)
-    new = re.sub(r"const DATA = \[.*?\];",
-                 "const DATA = " + data + ";", html, count=1, flags=re.S)
+    html = re.sub(r"const DATA = \[.*?\];",
+                  "const DATA = " + json.dumps(plan_data_json(), ensure_ascii=False) + ";",
+                  html, count=1, flags=re.S)
+    html = re.sub(r"const META = \{.*?\};",
+                  "const META = " + json.dumps(plan_meta_json(), ensure_ascii=False) + ";",
+                  html, count=1, flags=re.S)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(new)
+        f.write(html)
