@@ -28,6 +28,34 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+
+def _load_dotenv(path):
+    """Charge un fichier .env (KEY=VALUE) dans os.environ SANS écraser l'existant.
+
+    Best-effort et sans dépendance : lignes vides et commentaires (#) ignorés,
+    guillemets entourants retirés. Les vraies variables du shell restent
+    prioritaires (setdefault). But : que les commandes manuelles
+    (strava-auth-url, strava-auth-exchange, garmin-connect-login, send…)
+    marchent sans avoir à charger training/.env à la main dans le shell.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key, val = key.strip(), val.strip()
+                if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+                    val = val[1:-1]
+                if key:
+                    os.environ.setdefault(key, val)
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv(os.path.join(HERE, ".env"))
+
 from engine import (adapt, coach, config, dashboard, deliver, garmin,            # noqa: E402
                     garmin_connect, garmin_workout, program, report, strava,
                     workouts)
