@@ -65,19 +65,19 @@ _ROWS = [
     (18, "Spécifique", False, "Plus longue sortie continue : 4h",        hills(10, 90), easy(75),   long(240), b2b(120)),
     (19, "Spécifique", False, "Temps de pied + ravito",                  thr(3, 10, 2.5), easy(75), runwalk(4), b2b(120)),
     (20, "Spécifique", True,  "Décharge",                                strides(),     rec(40),    long(150), b2b(60)),
-    (21, "Spécifique", False, "2e simu backyard",                        resist(),      easy(60),   backyard(6),  b2b(120)),
-    (22, "Spécifique", False, "Le gros morceau : 5h",                    hills(10, 90), easy(75),   long(300), b2b(120)),
-    (23, "Spécifique", False, "Course de nuit (jeu.) + long",           thr(3, 10, 2.5), night(120), runwalk(4), b2b(120)),
+    (21, "Spécifique", False, "2e simu backyard",                        resist(),      easy(60),   backyard(8),  b2b(150)),
+    (22, "Spécifique", False, "Le gros morceau : 5h",                    hills(10, 90), easy(75),   long(300), b2b(150)),
+    (23, "Spécifique", False, "Course de nuit (jeu.) + long",           thr(3, 10, 2.5), night(120), runwalk(4), b2b(150)),
     (24, "Spécifique", True,  "Décharge",                                easy(60),      rec(40),    long(150), b2b(60)),
-    (25, "Spécifique", False, "Répétition majeure : 10 boucles / nuit",  resist(),      easy(60),   backyard(10), b2b(60)),
-    (26, "Spécifique", False, "Consolidation",                           hills(10, 90), easy(75),   long(240), b2b(120)),
+    (25, "Spécifique", False, "Répétition majeure : 12 boucles / nuit",  resist(),      easy(60),   backyard(12), b2b(60)),
+    (26, "Spécifique", False, "Consolidation",                           hills(10, 90), easy(75),   long(240), b2b(150)),
 
     # ---- Pic ----
-    (27, "Pic", False, "Gros volume",                                    resist(),      easy(75),   long(240), b2b(120)),
+    (27, "Pic", False, "Gros volume",                                    resist(),      easy(75),   long(240), b2b(150)),
     (28, "Pic", True,  "Mini-décharge avant le pic",                     thr(2, 15),    easy(60),   long(180), b2b(90)),
-    (29, "Pic", False, "Spécifique boucles",                             hills(10, 90), easy(75),   backyard(6),  b2b(120)),
-    (30, "Pic", False, "Plus gros continu : 5h",                         resist(),      easy(75),   long(300), b2b(120)),
-    (31, "Pic", False, "RÉPÉTITION GÉNÉRALE (10 boucles, nuit)",         strides(),     easy(45),   backyard(10), b2b(60)),
+    (29, "Pic", False, "Spécifique boucles",                             hills(10, 90), easy(75),   backyard(8),  b2b(150)),
+    (30, "Pic", False, "Plus gros continu : 5h",                         resist(),      easy(75),   long(300), b2b(150)),
+    (31, "Pic", False, "RÉPÉTITION GÉNÉRALE (14 boucles, nuit)",         strides(),     easy(45),   backyard(14), b2b(60)),
 
     # ---- Affûtage ----
     (32, "Affûtage", False, "On réduit le volume, on garde la fraîcheur", thr(2, 15),   easy(45),   long(150), b2b(60)),

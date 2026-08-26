@@ -55,6 +55,18 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=No
         L.append("\n## Consignes spécifiques\n")
         L.extend(f"- **{r}** — {t}" for r, t in tips)
 
+    # Marge du plan à 4 jours : le cross-training (aérobie sans impact) est LE
+    # multiplicateur de volume sûr. Rappelé en phase de construction (hors
+    # décharge et hors affûtage, où l'on cherche la fraîcheur, pas le volume).
+    if not w.deload and w.phase not in ("Affûtage",):
+        L.append("\n## Marge des 4 jours : le cross-training\n")
+        L.append("Sur 4 jours de course, ton volume plafonne — ta marge est là. "
+                 "Ajoute **2-4 h/sem de vélo/elliptique** (aérobie, **sans impact**) "
+                 "sur tes jours off : ça construit la caisse et **compte dans ta "
+                 "charge de base** (pas de fausse régression du plan), sans le "
+                 "risque blessure d'un 5ᵉ jour de course. Garde les jambes fraîches "
+                 "pour le week-end longue/B2B, qui reste prioritaire.")
+
     if res.adjustments:
         L.append("\n## Ajustements appliqués\n")
         for a in res.adjustments:
