@@ -29,8 +29,10 @@ Variables d'environnement :
     GARMIN_EMAIL          identifiant du compte Garmin Connect
     GARMIN_PASSWORD       mot de passe du compte
     GARMIN_TOKENS_BASE64  (option, RECOMMANDÉ pour l'automatique cloud) jeton de
-                          session encodé base64 — évite de se relogger à chaque
-                          run (Garmin limite les logins répétés) et fonctionne
+                          session encodé base64 (base64 du JSON de session
+                          `garminconnect` : di_token / di_refresh_token) — évite
+                          de se relogger à chaque run (Garmin limite les logins
+                          répétés, voire bloque l'IP datacenter) et fonctionne
                           dans un environnement éphémère (pas de dossier persistant).
                           L'obtenir une fois : `generate.py garmin-connect-token`.
     GARMIN_TOKENSTORE     (option) dossier des jetons (défaut ~/.garminconnect),
@@ -39,6 +41,8 @@ Variables d'environnement :
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -182,26 +186,48 @@ def _import_garmin():
     return Garmin
 
 
+def _token_json_from_env(raw: str) -> str:
+    """Normalise la valeur de `GARMIN_TOKENS_BASE64` en JSON de session.
+
+    Format attendu : base64 du JSON produit par `dump_token_base64`. On tolère
+    aussi un JSON collé tel quel (au cas où la variable aurait été renseignée
+    sans l'encodage).
+    """
+    s = raw.strip()
+    if s.startswith("{"):
+        return s
+    try:
+        return base64.b64decode(s).decode("utf-8")
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return s
+
+
 def login():
     """Ouvre une session Garmin Connect.
 
     Ordre de préférence (du plus robuste au plus interactif) :
       1. `GARMIN_TOKENS_BASE64` : restaure une session déjà authentifiée SANS
-         mot de passe ni MFA — idéal pour l'automatique en environnement éphémère.
+         mot de passe ni MFA — idéal pour l'automatique en environnement éphémère
+         (et pour contourner le blocage/rate-limit des IP datacenter au login).
       2. e-mail + mot de passe (+ dossier de jetons persistant si dispo) : login
          complet ; nécessite de franchir la MFA au 1er login si elle est active.
 
-    Import paresseux de `garminconnect` (le reste du moteur n'en dépend pas).
+    API `garminconnect` 0.3.x : la sérialisation de session est portée par le
+    client interne (`client.client.dumps/loads`) ; la restauration passe par
+    `Garmin.login(tokenstore=<jeton>)`, qui charge le jeton, rafraîchit le
+    di_token si besoin et valide la session (récupère le profil). Import
+    paresseux de `garminconnect` (le reste du moteur n'en dépend pas).
     """
     Garmin = _import_garmin()
 
     # 1) Jeton de session en variable d'environnement (sans mot de passe).
-    token_b64 = os.environ.get("GARMIN_TOKENS_BASE64")
-    if token_b64:
+    token_env = os.environ.get("GARMIN_TOKENS_BASE64")
+    if token_env:
         client = Garmin()
         try:
-            client.garth.loads(token_b64)      # restaure la session depuis le jeton
-            client.get_full_name()             # vérifie que le jeton est valide
+            # >512 chars => garminconnect traite la chaîne comme un jeton inline
+            # (et non comme un chemin) : loads() + refresh + validation profil.
+            client.login(tokenstore=_token_json_from_env(token_env))
             return client
         except Exception as e:
             if not (os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD")):
@@ -225,8 +251,14 @@ def login():
 
 
 def dump_token_base64(client) -> str:
-    """Sérialise la session courante en base64 (à stocker dans GARMIN_TOKENS_BASE64)."""
-    return client.garth.dumps()
+    """Sérialise la session courante en base64 (à stocker dans GARMIN_TOKENS_BASE64).
+
+    `garminconnect` 0.3.x sérialise en JSON via le client interne
+    (`client.client.dumps()`) ; on l'encode en base64 pour en faire un jeton
+    d'une seule ligne, sûr à poser en variable d'environnement.
+    """
+    raw_json = client.client.dumps()        # JSON : di_token / di_refresh_token / di_client_id
+    return base64.b64encode(raw_json.encode("utf-8")).decode("ascii")
 
 
 def upload_workout(client, payload: Dict) -> str:
