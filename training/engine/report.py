@@ -49,6 +49,12 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=No
                  f"{mins/60:.1f} h | `{files.get(role,'')}` |")
     L.append(f"\n**Total semaine : {program.planned_hours(w):.1f} h**\n")
 
+    tips = [(role, workouts.tip(w.sessions[role])) for role in _ordered_roles(w)]
+    tips = [(r, t) for r, t in tips if t]
+    if tips:
+        L.append("\n## Consignes spécifiques\n")
+        L.extend(f"- **{r}** — {t}" for r, t in tips)
+
     if res.adjustments:
         L.append("\n## Ajustements appliqués\n")
         for a in res.adjustments:
@@ -99,6 +105,7 @@ def week_report_json(res: AdaptResult, last: WeekSummary, files: dict, analysis=
                 "params": w.sessions[role].params,
                 "label": workouts.label(w.sessions[role]),
                 "minutes": round(workouts.minutes(w.sessions[role]), 1),
+                "tip": workouts.tip(w.sessions[role]),
                 "file": files.get(role),
             }
             for role in _ordered_roles(w)

@@ -35,6 +35,10 @@ _DEFAULTS = {
     # demi-heure de course pour la base/ACWR (course non-portée vs portée). La
     # progression du volume COURSE reste, elle, pilotée par la course seule.
     "cross_training_weight": 0.5,
+    # Zone FC 2 (aérobie) en bpm {min, max} : si fournie, les sorties aérobies
+    # (facile, longue, B2B, nuit, récup) sont cadrées en FC — pas en allure —
+    # pour tenir l'endurance basse (corrige la dérive vers la Z3).
+    "hr_zone2_bpm": None,
     "paces": {},
 }
 
@@ -104,6 +108,19 @@ CROSS_TRAINING_WEIGHT: float = max(0.0, min(1.0,
 PACES: Dict[str, str] = dict(_cfg["paces"] or {})
 
 
+def _parse_hr_zone(v) -> Optional[Dict[str, int]]:
+    """Zone FC {min, max} en bpm, seulement si cohérente (0 < min < max)."""
+    if not isinstance(v, dict):
+        return None
+    lo, hi = _parse_int(v.get("min")), _parse_int(v.get("max"))
+    if lo is None or hi is None or not (0 < lo < hi):
+        return None
+    return {"min": lo, "max": hi}
+
+
+HR_ZONE2: Optional[Dict[str, int]] = _parse_hr_zone(_cfg["hr_zone2_bpm"])
+
+
 def summary() -> Dict:
     return {
         "objective": OBJECTIVE,
@@ -115,6 +132,7 @@ def summary() -> Dict:
         "peak_volume_h": PEAK_VOLUME_H,
         "longest_run_min": LONGEST_RUN_MIN,
         "cross_training_weight": CROSS_TRAINING_WEIGHT,
+        "hr_zone2_bpm": HR_ZONE2,
         "paces_overridden": sorted(PACES.keys()),
         "config_path": CONFIG_PATH,
     }
