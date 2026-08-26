@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Routine hebdo LOCALE avec Claude comme coach — version Windows (PowerShell).
 
@@ -59,8 +59,14 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log   = Join-Path $logDir ("claude-weekly-{0}.log" -f (Get-Date -Format 'yyyy-MM-dd'))
 $stamp = Join-Path $logDir '.last-week-run'
 
-$iso      = [System.Globalization.ISOWeek]::GetWeekOfYear((Get-Date))
-$isoYear  = [System.Globalization.ISOWeek]::GetYear((Get-Date))
+# [System.Globalization.ISOWeek] n'existe pas sous .NET Framework (Windows
+# PowerShell 5.1) : calcul ISO 8601 manuel via le jeudi de la semaine courante.
+$now      = Get-Date
+$dow      = [int]$now.DayOfWeek; if ($dow -eq 0) { $dow = 7 }   # dimanche -> 7
+$thursday = $now.AddDays(4 - $dow)
+$isoYear  = $thursday.Year
+$jan1     = Get-Date -Year $isoYear -Month 1 -Day 1
+$iso      = [int][Math]::Ceiling((($thursday - $jan1).Days + 1) / 7.0)
 $thisWeek = "{0}-W{1:D2}" -f $isoYear, $iso
 
 "===== run $(Get-Date -Format o) (semaine $thisWeek) =====" | Tee-Object -FilePath $log -Append
