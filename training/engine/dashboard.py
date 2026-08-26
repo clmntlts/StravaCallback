@@ -204,7 +204,11 @@ def build(res: AdaptResult, last: WeekSummary,
     )
 
 
-_PAGE = """<title>Semaine {idx} — Backyard Ultra</title>
+_PAGE = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Semaine {idx} — Backyard Ultra</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
@@ -294,6 +298,8 @@ ul.rec li::marker{{color:var(--accent)}}
 
 footer{{margin-top:22px; text-align:center; color:var(--faint); font-size:.8rem}}
 </style>
+</head>
+<body>
 <div class="wrap">
   <div class="eyebrow">Backyard Ultra · coaching adaptatif</div>
   <h1>Semaine {idx} <span style="color:var(--faint);font-weight:600">/ {n}</span></h1>
@@ -332,4 +338,6 @@ footer{{margin-top:22px; text-align:center; color:var(--faint); font-size:.8rem}
 
   <footer>Généré automatiquement chaque dimanche · plan indicatif, adapte selon ta forme.</footer>
 </div>
+</body>
+</html>
 """
