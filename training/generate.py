@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -33,8 +34,9 @@ def _load_dotenv(path):
     """Charge un fichier .env (KEY=VALUE) dans os.environ SANS écraser l'existant.
 
     Best-effort et sans dépendance : lignes vides et commentaires (#) ignorés,
-    guillemets entourants retirés. Les vraies variables du shell restent
-    prioritaires (setdefault). But : que les commandes manuelles
+    y compris un commentaire en fin de ligne (` # ...`) sur une valeur non
+    quotée ; guillemets entourants retirés. Les vraies variables du shell
+    restent prioritaires (setdefault). But : que les commandes manuelles
     (strava-auth-url, strava-auth-exchange, garmin-connect-login, send…)
     marchent sans avoir à charger training/.env à la main dans le shell.
     """
@@ -46,8 +48,12 @@ def _load_dotenv(path):
                     continue
                 key, val = line.split("=", 1)
                 key, val = key.strip(), val.strip()
-                if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
-                    val = val[1:-1]
+                if val[:1] in ("\"", "'"):
+                    quote = val[0]
+                    end = val.find(quote, 1)
+                    val = val[1:end] if end != -1 else val[1:]
+                else:
+                    val = re.split(r"\s+#", val, maxsplit=1)[0].rstrip()
                 if key:
                     os.environ.setdefault(key, val)
     except FileNotFoundError:

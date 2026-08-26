@@ -262,8 +262,14 @@ def dump_token_base64(client) -> str:
 
 
 def upload_workout(client, payload: Dict) -> str:
-    """Crée la séance dans Garmin Connect ; renvoie son id."""
-    resp = client.connectapi("/workout-service/workout", method="POST", json=payload)
+    """Crée la séance dans Garmin Connect ; renvoie son id.
+
+    `garminconnect` 0.3.x a figé `Garmin.connectapi()`/`client.connectapi()` sur
+    GET (passer `method="POST"` en kwarg lève désormais "got multiple values
+    for argument 'method'") : le POST passe par le client interne `client.client`.
+    """
+    resp = client.client.post("connectapi", "/workout-service/workout",
+                              json=payload, api=True)
     wid = (resp or {}).get("workoutId") or (resp or {}).get("workoutKey") \
         or (resp or {}).get("id")
     if wid is None:
@@ -277,8 +283,8 @@ def schedule_workout(client, workout_id: str, date_iso: str) -> Dict:
     C'est cette planification qui la fait apparaître comme *séance du jour* sur
     la montre après synchronisation.
     """
-    return client.connectapi(f"/workout-service/schedule/{workout_id}",
-                             method="POST", json={"date": date_iso})
+    return client.client.post("connectapi", f"/workout-service/schedule/{workout_id}",
+                              json={"date": date_iso}, api=True)
 
 
 def push_and_schedule(payload: Dict, date_iso: str, client=None) -> Tuple[str, object]:
