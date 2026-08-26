@@ -367,10 +367,13 @@ h1 .of{{color:#9aa39c; font-weight:600}}
   color:#0e5c53; background:#e7f1ee; border:1px solid #cfe5df; border-radius:999px;
   padding:2px 10px; margin-right:8px}}
 
-.progress{{display:flex; align-items:center; gap:12px; margin:16px 0 8px}}
-.progress .track{{flex:1; height:9px; border-radius:999px; background:#e4e8e4;
+.progress{{margin:16px 0 8px}}
+.progress .ptrow{{display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom:6px}}
+.progress .track{{width:100%; height:9px; border-radius:999px; background:#e4e8e4;
   overflow:hidden}}
-.progress .fill{{height:100%; background:#157a6e; border-radius:999px}}
+.progress .fill{{display:block; height:9px; background:#157a6e; border-radius:999px;
+  min-width:7px}}
 .progress .pt{{font-family:"IBM Plex Mono",monospace; font-size:.8rem; color:#5c6660;
   white-space:nowrap; font-variant-numeric:tabular-nums}}
 .meta{{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px}}
@@ -473,9 +476,8 @@ footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line
     <p class="sub"><span class="ph">{phase}</span>{note}</p>
 
     <div class="progress">
-      <span class="pt">Plan</span>
-      <span class="track"><span class="fill" style="width:{pct}%"></span></span>
-      <span class="pt">{pct}%</span>
+      <div class="ptrow"><span class="pt">Progression du plan</span><span class="pt">{pct}%</span></div>
+      <div class="track"><div class="fill" style="width:{pct}%"></div></div>
     </div>
     <div class="meta">
       <span class="pill">{dates}</span>
