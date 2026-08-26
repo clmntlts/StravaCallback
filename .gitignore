@@ -1,0 +1,23 @@
+# Secrets & artefacts de l'exécution locale (JAMAIS committer).
+# (Le cache Python et les sorties workouts/semaine_*/ sont déjà couverts par
+#  training/.gitignore.)
+
+# Fichier d'environnement local chargé par run_weekly.sh (identifiants Strava,
+# Gmail, Garmin). Le modèle .env.example, lui, reste versionné.
+.env
+*.env
+!*.env.example
+
+# Jetons de session Garmin Connect (accès au compte) — si GARMIN_TOKENSTORE
+# pointe dans le repo. Le défaut ~/.garminconnect est hors repo.
+.garminconnect/
+**/.garminconnect/
+garmin_tokens.json
+
+# Logs des runs planifiés (cron)
+*.log
+training/logs/
+
+# Environnements virtuels Python
+.venv/
+venv/

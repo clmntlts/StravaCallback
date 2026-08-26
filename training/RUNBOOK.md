@@ -1,10 +1,60 @@
-# Runbook — automatisation hebdomadaire (Claude = le moteur)
+# Runbook — automatisation hebdomadaire
 
-Chaque **dimanche ~18h (Europe/Paris)**, une Routine réveille une session Claude
-fraîche qui exécute ce flux. Claude n'est pas un simple lanceur de script : il est
-**le coach**. Le code garantit le déterministe (récup Strava, encodage FIT, envoi) ;
-Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de conduite
-(`engine/program.py`) et des garde-fous (`engine/adapt.py`).
+Deux façons d'exécuter le run hebdo, selon le besoin :
+
+- **🖥️ Local (recommandé pour le pipeline complet, Garmin inclus)** — un simple
+  `cron` sur **ta machine** (IP résidentielle) lance `run_weekly.sh`. C'est le
+  seul chemin où la **planification Garmin Connect fonctionne de façon fiable** :
+  depuis une IP datacenter (cloud), Garmin bloque le login (429/403) et le
+  rafraîchissement des jetons échoue. Voir **« Exécution locale »** ci-dessous.
+- **☁️ Routine cloud (Claude = le coach)** — chaque dimanche, une Routine réveille
+  une session Claude fraîche qui exécute le flux et **apporte le jugement** de
+  coach. Idéal pour l'email + les `.FIT`, mais **la planification Garmin n'y est
+  pas fiable** (voir issue #14). Détaillé dans **« Flux de la Routine »**.
+
+Dans les deux cas, le code garantit le déterministe (récup Strava, encodage FIT,
+envoi) ; la ligne de conduite (`engine/program.py`) et les garde-fous
+(`engine/adapt.py`) bornent l'adaptation.
+
+## Exécution locale (recommandé) — cron sur ta machine
+
+Sur une machine à toi, tout se simplifie : le dossier de jetons Garnin
+`~/.garminconnect` **persiste** entre les runs, donc après **un** login tu n'y
+touches plus (pas de `GARMIN_TOKENS_BASE64`, pas de MFA à répéter), et le refresh
+des jetons (~1 an) fonctionne.
+
+> ⚠️ **IP résidentielle requise** pour la partie Garmin. Un VPS cloud a une IP
+> datacenter → il risque le même blocage Garmin qu'en Routine cloud. Préfère un
+> Raspberry Pi / NAS / mini-PC allumé chez toi (ou ton laptop s'il est allumé à
+> l'heure du cron).
+
+**Mise en place (une fois) :**
+
+```bash
+# 1) dépendance Garmin (optionnelle : seulement pour --push-connect)
+pip install "garminconnect>=0.3,<0.4"
+
+# 2) secrets locaux (jamais committés : training/.env est gitignoré)
+cp training/.env.example training/.env
+$EDITOR training/.env                       # renseigne Strava / Gmail / Garmin
+
+# 3) login Garmin Connect UNE fois (franchit la MFA, remplit ~/.garminconnect)
+python3 training/generate.py garmin-connect-login
+
+# 4) test à blanc (génère, n'envoie rien)
+./training/run_weekly.sh --dry-run
+```
+
+**Cron hebdomadaire** (dimanche 19h, heure locale de la machine) :
+
+```cron
+0 19 * * 0  /chemin/vers/StravaCallback/training/run_weekly.sh >> /chemin/vers/StravaCallback/training/logs/cron.out 2>&1
+```
+
+`run_weekly.sh` charge `training/.env`, ajoute `--push-connect` automatiquement si
+des identifiants Garmin sont présents, exécute `generate.py send --live`, et
+journalise dans `training/logs/`. Les arguments passés au script sont transmis à
+`send` (`./training/run_weekly.sh --dry-run`, `./training/run_weekly.sh 12`).
 
 ## Flux de la Routine
 
@@ -67,7 +117,7 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
 | `GARMIN_EMAIL` | *(push Connect non-officiel)* identifiant du compte Garmin Connect |
 | `GARMIN_PASSWORD` | *(push Connect non-officiel)* mot de passe du compte |
-| `GARMIN_TOKENS_BASE64` | *(auto cloud)* jeton de session base64 (via `garmin-connect-token`) — évite le re-login |
+| `GARMIN_TOKENS_BASE64` | *(cloud éphémère uniquement)* jeton de session base64 (via `garmin-connect-token`). **Inutile en local** (le tokenstore persiste). Peu fiable en cloud : le refresh du jeton échoue derrière le proxy — voir issue #14. |
 | `GARMIN_TOKENSTORE` | *(option)* dossier des jetons Connect (défaut `~/.garminconnect`) |
 
 - Jeton Strava : créer une app sur https://www.strava.com/settings/api, puis
@@ -122,6 +172,12 @@ python3 generate.py send --live --push-connect    # upload + planification des 4
 ```
 
 ### Full-auto (Routine cloud, sans machine ni MFA) : jeton en variable
+
+> ⚠️ **Peu fiable en cloud.** Le rafraîchissement du jeton passe par un transport
+> (`curl_cffi`) coupé par le proxy sortant : un jeton frais tient le temps d'un
+> run, mais un jeton âgé (cas d'une Routine hebdo) déclenche un refresh qui
+> échoue. Pour une planification Garmin fiable, préfère l'**exécution locale**
+> ci-dessus. Détails et suivi : issue #14.
 
 L'environnement cloud est **éphémère** : le dossier de jetons (`~/.garminconnect`)
 est effacé entre les runs. Pour que la Routine se connecte **sans re-login**
