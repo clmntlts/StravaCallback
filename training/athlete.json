@@ -1,25 +1,19 @@
 {
   "_comment": "Profil athlète = mémoire intersessions du moteur. Rempli automatiquement au 1er démarrage (Claude pose les questions), il pilote tout le plan. Toute session le lit depuis le repo.",
-
-  "onboarded": false,
-
-  "objective": "18-24 yards",
-  "race_date": "2027-04-24",
-
+  "onboarded": true,
+  "objective": "24 yards",
+  "race_date": "2027-04-03",
   "plan_start": null,
   "plan_weeks": null,
-
   "days_per_week": 4,
-
-  "start_volume_h": null,
+  "start_volume_h": 4.0,
   "peak_volume_h": null,
-
   "_comment_longest": "Plus longue sortie course récente (min), déclarée à l'onboarding : plancher du plafond de la sortie longue tant que Strava n'a pas mieux.",
-  "longest_run_min": null,
-
+  "longest_run_min": 75.0,
   "_comment_cross": "Poids d'une heure de cross-training (vélo, rameur, ski…) dans la charge AÉROBIE, relatif à une heure de course. 0.5 par défaut. Compte pour la base/ACWR et empêche une fausse régression ; ne gonfle jamais le volume COURSE prescrit (l'impact au sol reste spécifique).",
   "cross_training_weight": 0.5,
-
+  "_comment_hr_zone2": "Zone FC 2 (aerobie) calibree le 2026-08-26 : zones officielles Strava (methode Max HR) recoupees avec le temps reel passe par zone sur les 6 dernieres sorties course avec capteur FC (sur les 10 dernieres). Constat : seulement ~46% du temps de course reel est en Z2, ~38% en Z3 -> derive frequente vers le haut, a corriger en ralentissant les sorties faciles/longues.",
+  "hr_zone2_bpm": {"min": 123, "max": 151},
   "paces": {
     "recovery": "6:45",
     "easy": "6:15",
