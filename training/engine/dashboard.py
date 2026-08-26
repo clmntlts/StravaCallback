@@ -212,97 +212,88 @@ _PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
-:root{{
-  --ground:#f4f6f4; --surface:#ffffff; --raise:#fbfcfb;
-  --ink:#16211d; --muted:#5c6660; --faint:#8a938c;
-  --hair:#e4e8e4; --hair2:#eef1ee;
-  --accent:#157a6e; --accent-ink:#0e5c53; --plan:#d3dad4;
-  --good:#2e7d46; --warn:#b67514; --bad:#c0392b;
-  --good-bg:#e9f3ec; --warn-bg:#f7efe0; --bad-bg:#f8e9e6;
-  --shadow:0 1px 2px rgba(22,33,29,.05), 0 10px 26px -16px rgba(22,33,29,.22);
-}}
 *{{box-sizing:border-box}}
-body{{margin:0; background:var(--ground); color:var(--ink);
+body{{margin:0; background:#f4f6f4; color:#16211d;
   font-family:"Barlow",-apple-system,Segoe UI,Roboto,sans-serif; line-height:1.5;
   -webkit-font-smoothing:antialiased;}}
 .wrap{{max-width:800px; margin:0 auto; padding:clamp(18px,4vw,40px)}}
 
 .eyebrow{{font-family:"Barlow Condensed",sans-serif; text-transform:uppercase;
-  letter-spacing:.16em; color:var(--accent-ink); font-weight:700; font-size:.78rem}}
+  letter-spacing:.16em; color:#0e5c53; font-weight:700; font-size:.78rem}}
 h1{{font-family:"Barlow Condensed",sans-serif; font-weight:700;
   font-size:clamp(2rem,5.5vw,3rem); margin:.06em 0 .1em; line-height:1; letter-spacing:-.01em}}
-.sub{{color:var(--muted); margin:0}}
+.sub{{color:#5c6660; margin:0}}
 
 .progress{{display:flex; align-items:center; gap:12px; margin:16px 0 6px}}
-.progress .track{{flex:1; height:8px; border-radius:999px; background:var(--hair);
+.progress .track{{flex:1; height:8px; border-radius:999px; background:#e4e8e4;
   overflow:hidden}}
-.progress .fill{{height:100%; background:var(--accent); border-radius:999px}}
-.progress .pt{{font-family:"IBM Plex Mono",monospace; font-size:.82rem; color:var(--muted);
+.progress .fill{{height:100%; background:#157a6e; border-radius:999px}}
+.progress .pt{{font-family:"IBM Plex Mono",monospace; font-size:.82rem; color:#5c6660;
   white-space:nowrap; font-variant-numeric:tabular-nums}}
 .meta{{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}}
 .pill{{font-family:"Barlow Condensed",sans-serif; font-weight:600; font-size:.86rem;
-  padding:4px 11px; border-radius:999px; background:var(--surface);
-  border:1px solid var(--hair); color:var(--muted)}}
-.pill b{{color:var(--accent-ink)}}
+  padding:4px 11px; border-radius:999px; background:#ffffff;
+  border:1px solid #e4e8e4; color:#5c6660}}
+.pill b{{color:#0e5c53}}
 
 .kpis{{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;
   margin:18px 0}}
-.kpi{{background:var(--surface); border:1px solid var(--hair); border-radius:14px;
-  padding:14px 15px; box-shadow:var(--shadow); border-top:3px solid var(--hair)}}
-.kpi.good{{border-top-color:var(--good); background:var(--good-bg)}}
-.kpi.warn{{border-top-color:var(--warn); background:var(--warn-bg)}}
-.kpi.bad{{border-top-color:var(--bad); background:var(--bad-bg)}}
+.kpi{{background:#ffffff; border:1px solid #e4e8e4; border-radius:14px;
+  padding:14px 15px; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 10px 26px -16px rgba(22,33,29,.22); border-top:3px solid #e4e8e4}}
+.kpi.good{{border-top-color:#2e7d46; background:#e9f3ec}}
+.kpi.warn{{border-top-color:#b67514; background:#f7efe0}}
+.kpi.bad{{border-top-color:#c0392b; background:#f8e9e6}}
 .kv{{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:1.7rem;
   line-height:1; font-variant-numeric:tabular-nums}}
-.kl{{font-size:.82rem; color:var(--muted); margin-top:5px; font-weight:500}}
-.ks{{font-size:.72rem; color:var(--faint); margin-top:2px}}
+.kl{{font-size:.82rem; color:#5c6660; margin-top:5px; font-weight:500}}
+.ks{{font-size:.72rem; color:#8a938c; margin-top:2px}}
 
-.card{{background:var(--surface); border:1px solid var(--hair); border-radius:16px;
-  padding:clamp(16px,3vw,24px); margin-top:16px; box-shadow:var(--shadow)}}
+.card{{background:#ffffff; border:1px solid #e4e8e4; border-radius:16px;
+  padding:clamp(16px,3vw,24px); margin-top:16px; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 10px 26px -16px rgba(22,33,29,.22)}}
 .h2{{font-family:"Barlow Condensed",sans-serif; font-weight:700; font-size:1.35rem; margin:0 0 12px}}
 .h3{{font-family:"Barlow Condensed",sans-serif; font-weight:700; font-size:1rem;
-  margin:14px 0 6px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}}
-.coach{{border-left:3px solid var(--accent); background:var(--raise);
+  margin:14px 0 6px; text-transform:uppercase; letter-spacing:.04em; color:#5c6660}}
+.coach{{border-left:3px solid #157a6e; background:#fbfcfb;
   padding:11px 14px; border-radius:0 10px 10px 0; margin:0 0 14px; font-weight:500}}
 
 table{{width:100%; border-collapse:collapse; font-size:.98rem}}
-td{{padding:9px 6px; border-bottom:1px solid var(--hair2)}}
+td{{padding:9px 6px; border-bottom:1px solid #eef1ee}}
 tr:last-child td{{border-bottom:none}}
 td.d{{font-family:"Barlow Condensed",sans-serif; text-transform:uppercase;
-  font-size:.74rem; letter-spacing:.05em; color:var(--faint); width:74px}}
-td.n{{text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--accent-ink);
+  font-size:.74rem; letter-spacing:.05em; color:#8a938c; width:74px}}
+td.n{{text-align:right; font-family:"IBM Plex Mono",monospace; color:#0e5c53;
   white-space:nowrap; font-variant-numeric:tabular-nums}}
 .adj{{margin-top:4px}} .adj ul{{margin:0; padding-left:1.05em}}
-.adj li{{margin:.34em 0; font-size:.9rem}} .muted{{color:var(--muted)}}
+.adj li{{margin:.34em 0; font-size:.9rem}} .muted{{color:#5c6660}}
 .verdict{{font-family:"Barlow Condensed",sans-serif; font-weight:600; font-size:1.15rem;
-  color:var(--accent-ink); margin:0 0 6px}}
+  color:#0e5c53; margin:0 0 6px}}
 ul.obs,ul.rec{{margin:2px 0 0; padding-left:1.05em}}
 ul.obs li{{margin:.32em 0; font-size:.94rem}}
 ul.trd{{margin:2px 0 0; padding-left:1.05em}}
-ul.trd li{{margin:.3em 0; font-size:.92rem; color:var(--muted)}}
+ul.trd li{{margin:.3em 0; font-size:.92rem; color:#5c6660}}
 ul.rec li{{margin:.36em 0; font-size:.94rem; font-weight:500}}
-ul.rec li::marker{{color:var(--accent)}}
+ul.rec li::marker{{color:#157a6e}}
 
 .chart{{width:100%; height:auto; display:block; margin-top:4px}}
 .chart .band{{fill:#eef1ee}}
-.chart .grid{{stroke:var(--hair2); stroke-width:1}}
-.chart .axis{{stroke:var(--hair); stroke-width:1.5}}
-.chart .plan{{fill:var(--plan)}}
-.chart .act{{fill:var(--accent)}}
+.chart .grid{{stroke:#eef1ee; stroke-width:1}}
+.chart .axis{{stroke:#e4e8e4; stroke-width:1.5}}
+.chart .plan{{fill:#d3dad4}}
+.chart .act{{fill:#157a6e}}
 .chart .cur{{fill:#fff5ed; stroke:#e0a35a; stroke-width:1; stroke-dasharray:3 2}}
-.chart .yl{{fill:var(--faint); font-size:9px; text-anchor:end; font-family:"IBM Plex Mono",monospace}}
-.chart .xl{{fill:var(--faint); font-size:9px; text-anchor:middle; font-family:"IBM Plex Mono",monospace}}
-.chart .ph{{fill:var(--muted); font-size:9px; text-anchor:middle; font-family:"Barlow Condensed",sans-serif; letter-spacing:.03em}}
-.legend{{display:flex; flex-wrap:wrap; gap:16px; margin-top:10px; font-size:.85rem; color:var(--muted)}}
+.chart .yl{{fill:#8a938c; font-size:9px; text-anchor:end; font-family:"IBM Plex Mono",monospace}}
+.chart .xl{{fill:#8a938c; font-size:9px; text-anchor:middle; font-family:"IBM Plex Mono",monospace}}
+.chart .ph{{fill:#5c6660; font-size:9px; text-anchor:middle; font-family:"Barlow Condensed",sans-serif; letter-spacing:.03em}}
+.legend{{display:flex; flex-wrap:wrap; gap:16px; margin-top:10px; font-size:.85rem; color:#5c6660}}
 .legend i{{display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px}}
 
-footer{{margin-top:22px; text-align:center; color:var(--faint); font-size:.8rem}}
+footer{{margin-top:22px; text-align:center; color:#8a938c; font-size:.8rem}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="eyebrow">Backyard Ultra · coaching adaptatif</div>
-  <h1>Semaine {idx} <span style="color:var(--faint);font-weight:600">/ {n}</span></h1>
+  <h1>Semaine {idx} <span style="color:#8a938c;font-weight:600">/ {n}</span></h1>
   <p class="sub">{phase} — {note}</p>
 
   <div class="progress">
@@ -330,8 +321,8 @@ footer{{margin-top:22px; text-align:center; color:var(--faint); font-size:.8rem}
     <div class="h2">Progression — prévu vs réalisé</div>
     {chart}
     <div class="legend">
-      <span><i style="background:var(--plan)"></i>Prévu (objectif)</span>
-      <span><i style="background:var(--accent)"></i>Réalisé (Strava)</span>
+      <span><i style="background:#d3dad4"></i>Prévu (objectif)</span>
+      <span><i style="background:#157a6e"></i>Réalisé (Strava)</span>
       <span><i style="background:#fff5ed;border:1px dashed #e0a35a"></i>Semaine en cours</span>
     </div>
   </section>
