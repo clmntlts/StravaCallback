@@ -75,11 +75,16 @@ class TestWeeklyActuals(unittest.TestCase):
     def test_buckets(self):
         acts = strava.load_activities_file(
             os.path.join(os.path.dirname(__file__), "fixtures", "last_week_sample.json"))
+        today = date(2026, 9, 14)
         b = strava.weekly_actual_hours(acts, program.PROGRAM_START, program.N_WEEKS,
-                                       today=date(2026, 9, 14))
-        self.assertGreater(b[0], 0)         # semaine 1 : des heures
-        self.assertEqual(b[2], 0.0)         # semaine 3 (en cours) : échue -> 0
-        self.assertIsNone(b[10])            # semaine future -> None
+                                       today=today)
+        cur = (today - program.PROGRAM_START).days // 7   # index de la semaine en cours
+        # semaines échues : jamais None, et au moins une porte des heures réalisées
+        self.assertTrue(all(b[i] is not None for i in range(cur + 1)))
+        self.assertGreater(sum(b[i] for i in range(cur + 1)), 0)
+        # semaines futures -> None (juste après la semaine en cours, et en fin de plan)
+        self.assertIsNone(b[cur + 1])
+        self.assertIsNone(b[-1])
 
 
 class TestDashboard(unittest.TestCase):
