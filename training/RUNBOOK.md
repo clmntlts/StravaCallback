@@ -91,6 +91,51 @@ claude login                                  # (ou export ANTHROPIC_API_KEY=…
 > Posture plus stricte via une allowlist : `export CLAUDE_PERM='--allowedTools Bash Read Edit'`
 > avant l'appel. Vérifie les drapeaux disponibles avec `claude --help`.
 
+> `run_claude_weekly.sh` (bash) est pour **macOS/Linux**. Sous **Windows**, utilise
+> `run_claude_weekly.ps1` (PowerShell) + le Planificateur de tâches — voir ci-dessous.
+
+### Windows 11 — Planificateur de tâches (rattrapage au réveil)
+
+Sous Windows, le wrapper est **`run_claude_weekly.ps1`** (racine) et le minuteur est
+le **Planificateur de tâches**. L'option clé **« Exécuter dès que possible après
+un démarrage planifié manqué »** (`StartWhenAvailable`) donne exactement le
+rattrapage voulu : si le PC était éteint/en veille à l'heure fixe, la tâche part
+**au prochain allumage**. Le wrapper contient en plus une **garde « une fois par
+semaine »** (fichier `training/logs/.last-week-run`) : même si le PC se réveille
+plusieurs fois, le run n'a lieu qu'une fois par semaine ISO.
+
+**Mise en place (une fois) :**
+
+```powershell
+# 1) Claude Code installé + authentifié, secrets + login Garmin faits
+claude login
+Copy-Item training\.env.example training\.env      # puis renseigne-le
+python training\generate.py garmin-connect-login    # login Garmin (MFA), tokenstore persistant
+
+# 2) test manuel du run headless
+.\run_claude_weekly.ps1 -Force
+
+# 3) enregistrer la tâche planifiée (dimanche 19h, rattrapage au réveil)
+$root   = "C:\chemin\vers\StravaCallback"           # adapte le chemin
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$root\run_claude_weekly.ps1`""
+$trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 7pm
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+            -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName 'StravaBackyard-Weekly' -Action $action `
+            -Trigger $trigger -Settings $settings `
+            -Description 'Run hebdo coach Backyard Ultra (Claude local)'
+```
+
+- `-StartWhenAvailable` → rattrape un créneau manqué (PC éteint) au prochain
+  démarrage. `-WakeToRun` → réveille depuis la **veille** (pas depuis l'arrêt
+  complet) pour tenir l'heure fixe quand c'est possible.
+- La tâche s'exécute sous **ton compte** ; coche « Exécuter même si l'utilisateur
+  n'est pas connecté » dans les propriétés de la tâche si tu veux qu'elle tourne
+  sans session ouverte (elle demandera ton mot de passe Windows).
+- Logs dans `training\logs\claude-weekly-*.log`. Relancer à la main :
+  `.\run_claude_weekly.ps1 -Force`.
+
 **Onboarding** (personnaliser `training/athlete.json`, la mémoire durable) : c'est
 un **one-shot**, indépendant de la routine. Fais-le une fois en interactif — ouvre
 une session Claude Code locale (elle te posera les questions via le hook de

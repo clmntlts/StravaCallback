@@ -11,7 +11,11 @@ de `engine/program.py`. Ne sors jamais de la structure macro du plan.
 Contexte d'exécution : **local** (machine perso, IP résidentielle). La
 planification Garmin Connect fonctionne donc ici (`--push-connect`). Les secrets
 sont dans `training/.env` (déjà chargés dans l'environnement si lancé via
-`run_claude_weekly.sh`).
+`run_claude_weekly.sh` sous macOS/Linux, ou `run_claude_weekly.ps1` sous Windows).
+
+> Adapte les commandes à la plateforme : sous **Windows**, utilise `python`
+> (pas `python3`) et enchaîne les commandes en deux temps plutôt qu'avec `&&` si
+> le shell ne le supporte pas.
 
 Déroule ce flux, dans `training/` :
 
