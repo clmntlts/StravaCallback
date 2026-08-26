@@ -29,6 +29,14 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+# La console Windows est souvent en cp1252 : forcer UTF-8 pour les glyphes des
+# résumés/rapports (→ ✓ ✗ ✉ 🏃), sinon UnicodeEncodeError coupe la commande.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 
 def _load_dotenv(path):
     """Charge un fichier .env (KEY=VALUE) dans os.environ SANS écraser l'existant.
