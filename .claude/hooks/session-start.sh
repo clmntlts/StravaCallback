@@ -7,8 +7,13 @@ set -uo pipefail
 DIR="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 GEN="$DIR/training/generate.py"
 
-# Parseur FIT pour la suite de tests (best-effort : les tests le skippent sinon).
+# Dépendances optionnelles (best-effort, jamais bloquant) :
+#  - fitdecode : validation des .FIT dans les tests
+#  - garminconnect : planification au calendrier Garmin (send --push-connect)
+# Ce hook tourne APRÈS le clone (contrairement au setup script), donc c'est
+# l'endroit fiable pour préparer ces paquets pour la Routine hebdo.
 python3 -c "import fitdecode" >/dev/null 2>&1 || pip install -q fitdecode >/dev/null 2>&1 || true
+python3 -c "import garminconnect" >/dev/null 2>&1 || pip install -q garminconnect >/dev/null 2>&1 || true
 
 echo "======================================================================"
 echo " Backyard Ultra — moteur d'entraînement adaptatif (prêt)"
