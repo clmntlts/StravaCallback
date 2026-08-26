@@ -56,6 +56,57 @@ des identifiants Garmin sont présents, exécute `generate.py send --live`, et
 journalise dans `training/logs/`. Les arguments passés au script sont transmis à
 `send` (`./training/run_weekly.sh --dry-run`, `./training/run_weekly.sh 12`).
 
+> **Deux variantes de routine locale :**
+> - `training/run_weekly.sh` → **déterministe pur** (pas de Claude). L'engine
+>   adapte via `adapt.py` et envoie. Simple, 100 % autonome.
+> - `run_claude_weekly.sh` (racine) → **Claude comme coach** (ci-dessous). Garde
+>   le jugement hebdo en plus du déterministe.
+
+### Variante : Claude comme coach, en local (headless)
+
+Pour **garder Claude dans la boucle** tout en profitant de l'IP résidentielle,
+on planifie le **CLI Claude Code local** (et non la Routine cloud du produit, qui
+tourne sur IP datacenter → Garmin bloqué). `run_claude_weekly.sh` lance Claude en
+mode headless sur la commande `/weekly` : il génère, **juge** la proposition
+(cohérence charge/fatigue, signaux particuliers), envoie l'email et planifie sur
+Garmin, puis dépose d'éventuelles suites en issues `pending-dev`.
+
+**Mise en place (une fois) :**
+
+```bash
+# Claude Code installé et authentifié sur la machine
+claude login                                  # (ou export ANTHROPIC_API_KEY=…)
+# secrets + login Garmin déjà faits (voir « Exécution locale » ci-dessus)
+./run_claude_weekly.sh                         # test manuel du run headless
+```
+
+**Cron hebdomadaire :**
+
+```cron
+0 19 * * 0  /chemin/vers/StravaCallback/run_claude_weekly.sh >> /chemin/vers/StravaCallback/training/logs/claude-cron.out 2>&1
+```
+
+> ⚠️ Le wrapper lance Claude avec `--dangerously-skip-permissions` (aucun prompt
+> en run non-surveillé) : à n'utiliser que sur **ta** machine de confiance.
+> Posture plus stricte via une allowlist : `export CLAUDE_PERM='--allowedTools Bash Read Edit'`
+> avant l'appel. Vérifie les drapeaux disponibles avec `claude --help`.
+
+**Onboarding** (personnaliser `training/athlete.json`, la mémoire durable) : c'est
+un **one-shot**, indépendant de la routine. Fais-le une fois en interactif — ouvre
+une session Claude Code locale (elle te posera les questions via le hook de
+démarrage) ou lance directement :
+
+```bash
+python3 training/generate.py onboard --objective "18-24 yards" --race-date 2027-04-24 \
+  --days 4 --start-volume <H> --longest-run <MIN> --cross-weight 0.5 \
+  --ref-distance 10k --ref-time 44:00
+git add training/athlete.json && git commit -m "Onboarding athlète"
+```
+
+`athlete.json` est versionné : une fois rempli, **tous** les runs (locaux comme
+interactifs) le relisent depuis le repo. La routine hebdo, elle, ne refait jamais
+l'onboarding.
+
 ## Flux de la Routine
 
 1. **Se placer dans le repo** et récupérer la dernière version :
