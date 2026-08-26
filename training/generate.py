@@ -287,9 +287,13 @@ def cmd_send(args):
 
 
 def cmd_library(args):
+    # Bibliothèque de séances NOMINALES : construite à l'échelle 1.0, donc STABLE
+    # et indépendante du volume de l'athlète (start_volume_h). Le réalisé mis à
+    # l'échelle/adapté vit dans les runs hebdo (`send`), pas dans cette référence.
     os.makedirs(WORKOUTS_DIR, exist_ok=True)
     seen = {}
-    for w in program.PROGRAM:
+    for i in range(1, program.N_WEEKS + 1):
+        w = program.build_week_scaled(i, 1.0)
         for spec in w.sessions.values():
             seen.setdefault(workouts.slug(spec), spec)
     for key, spec in sorted(seen.items()):
