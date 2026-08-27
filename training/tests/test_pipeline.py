@@ -6,7 +6,7 @@ from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import (adapt, coach, dashboard, deliver, garmin, garmin_connect,
-                    garmin_workout, program, strava)
+                    garmin_workout, program, strava, workouts)
 from engine.models import Activity, SessionSpec, WeekSummary
 
 
@@ -96,7 +96,10 @@ class TestDashboard(unittest.TestCase):
         actuals[7] = 4.0
         html = dashboard.build(res, res and WeekSummary(3, 12000, 40000, 500, 5400, 16200),
                                actuals, today=date(2026, 11, 1))
-        self.assertIn("<svg", html)
+        # [L3] revue pipeline 2026-08-26 : le graphe ne doit plus être en <svg>
+        # inline (Gmail le vidait) mais en table HTML de barres.
+        self.assertNotIn("<svg", html)
+        self.assertIn('<table class="chart"', html)
         self.assertIn("Semaine 9", html)
         self.assertIn("<title>", html)
 
@@ -137,6 +140,19 @@ class TestGarminTranslate(unittest.TestCase):
                     walk(n["steps"])
         walk(w["steps"])
         self.assertEqual(len(orders), len(set(orders)))
+
+    def test_easy_and_long_carry_heart_rate_target(self):
+        # Angle mort [L7] de la revue pipeline 2026-08-26 : aucun test ne
+        # vérifiait que les séances aérobies (garde-fou Z2) traduisent bien en
+        # cible FC plutôt qu'en OPEN.
+        lo, hi = workouts.hr_range("z2")
+        for role, params in (("easy", {"minutes": 45}), ("long", {"minutes": 180})):
+            with self.subTest(role=role):
+                w = garmin_workout.session_to_garmin(SessionSpec(role, params))
+                main = w["steps"][0]  # easy/long n'ont pas d'échauffement séparé
+                self.assertEqual(main["targetType"], garmin_workout.TARGET_HEART_RATE)
+                self.assertEqual(main["targetValueLow"], lo)
+                self.assertEqual(main["targetValueHigh"], hi)
 
 
 class TestGarminConnectTranslate(unittest.TestCase):
@@ -182,6 +198,19 @@ class TestGarminConnectTranslate(unittest.TestCase):
         group = [s for s in self._steps(w) if s.get("type") == "RepeatGroupDTO"][0]
         conds = [c["endCondition"]["conditionTypeKey"] for c in group["workoutSteps"]]
         self.assertIn("distance", conds)   # la boucle backyard est à distance fixe
+
+    def test_easy_and_long_carry_heart_rate_target(self):
+        # Angle mort [L7] de la revue pipeline 2026-08-26 : aucun test ne
+        # vérifiait que les séances aérobies (garde-fou Z2) traduisent bien en
+        # cible FC plutôt qu'en no.target.
+        lo, hi = workouts.hr_range("z2")
+        for role, params in (("easy", {"minutes": 45}), ("long", {"minutes": 180})):
+            with self.subTest(role=role):
+                w = garmin_connect.session_to_connect(SessionSpec(role, params))
+                main = self._steps(w)[0]  # easy/long n'ont pas d'échauffement séparé
+                self.assertEqual(main["targetType"]["workoutTargetTypeKey"], "heart.rate.zone")
+                self.assertEqual(main["targetValueOne"], lo)
+                self.assertEqual(main["targetValueTwo"], hi)
 
     def test_not_configured_without_env(self):
         for k in ("GARMIN_EMAIL", "GARMIN_PASSWORD", "GARMIN_TOKENS_BASE64"):

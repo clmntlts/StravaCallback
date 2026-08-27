@@ -54,75 +54,73 @@ def _nominal_hours() -> List[float]:
             for i in range(1, program.N_WEEKS + 1)]
 
 
-def _load_curve_svg(planned: List[float], actual: List[Optional[float]],
-                    current: int, nominal: Optional[List[float]] = None) -> str:
+def _bar_stack(height_px: int, total_px: int, color: str) -> str:
+    """Barre verticale ancrée en bas : mini-table 2 lignes (espaceur + barre
+    colorée). Table pure (pas de position/flex/grid) => rendu identique dans
+    Gmail et dans un navigateur — c'est le SVG inline [L3] que Gmail vidait."""
+    if height_px <= 0:
+        return f'<div style="height:{total_px}px;font-size:0;line-height:0">&nbsp;</div>'
+    spacer = max(0, total_px - height_px)
+    rows = ""
+    if spacer:
+        rows += f'<tr><td style="height:{spacer}px;line-height:0;font-size:0">&nbsp;</td></tr>'
+    rows += (f'<tr><td style="height:{height_px}px;line-height:0;font-size:0;'
+             f'background:{color}">&nbsp;</td></tr>')
+    return f'<table class="bar" cellpadding="0" cellspacing="0"><tbody>{rows}</tbody></table>'
+
+
+_BAR_W = {"nom": 4, "plan": 8, "act": 6}   # largeurs (px) des 3 barres d'une semaine
+
+
+def _week_col(planned_px: int, actual_px: int, nominal_px: int, ph: int,
+             is_current: bool) -> str:
+    cells = (
+        f'<td style="width:{_BAR_W["nom"]}px">{_bar_stack(nominal_px, ph, "#e3c584")}</td>'
+        f'<td style="width:{_BAR_W["plan"]}px">{_bar_stack(planned_px, ph, "#cfd6d0")}</td>'
+        f'<td style="width:{_BAR_W["act"]}px">{_bar_stack(actual_px, ph, "#157a6e")}</td>'
+    )
+    cls = ' class="cur"' if is_current else ""
+    return (f'<td{cls}><table class="wk" cellpadding="0" cellspacing="1">'
+            f'<tbody><tr>{cells}</tr></tbody></table></td>')
+
+
+def _load_curve_html(planned: List[float], actual: List[Optional[float]],
+                     current: int, nominal: Optional[List[float]] = None) -> str:
+    """Charge hebdomadaire : ambition (template) · prévu · réalisé, en table HTML
+    (barres = mini-tables à hauteur fixe). [L3] : l'ancien rendu en <svg> inline
+    était vidé par Gmail (panneau « Progression » vide dans le corps d'email)."""
     n = len(planned)
     actual = (list(actual) + [None] * n)[:n]
     nominal = (list(nominal) + [None] * n)[:n] if nominal else [None] * n
-    W, H = 760, 236
-    L, R, T, B = 30, 8, 26, 26
-    plotW, plotH = W - L - R, H - T - B
-    bw = plotW / n
+    PH = 110  # hauteur max d'une barre, en px
+
     tops = planned + [a for a in actual if a] + [x for x in nominal if x] + [1]
     top = max(tops)
     top = (int(top // 4) + 1) * 4  # arrondi sup. au multiple de 4 h
 
-    def x(i): return L + i * bw
-    def y(v): return T + plotH * (1 - v / top)
+    def px(v):
+        if not v or v <= 0:
+            return 0
+        return max(1, round(v / top * PH))
 
-    parts = []
-    # bandes de phase alternées (contexte, très désaturé) + libellés
-    for k, (name, s, e) in enumerate(_phase_segments()):
-        x0, x1 = x(s), x(e + 1)
-        if k % 2 == 1:
-            parts.append(f'<rect x="{x0:.1f}" y="{T}" width="{x1-x0:.1f}" '
-                         f'height="{plotH:.1f}" class="band"/>')
-        parts.append(f'<text x="{(x0+x1)/2:.1f}" y="{T-9:.1f}" class="ph">{_esc(name)}</text>')
+    # bandes de phase (en-tête de colonnes groupées) + libellés
+    phase_row = "".join(
+        f'<td colspan="{e - s + 1}" class="ph{" alt" if k % 2 else ""}">{_esc(name)}</td>'
+        for k, (name, s, e) in enumerate(_phase_segments()))
 
-    # grille horizontale + libellés d'axe
-    for v in range(0, top + 1, 4):
-        yy = y(v)
-        parts.append(f'<line x1="{L}" y1="{yy:.1f}" x2="{W-R}" y2="{yy:.1f}" class="grid"/>')
-        parts.append(f'<text x="{L-6}" y="{yy+3:.1f}" class="yl">{v}h</text>')
-
-    # surlignage de la semaine en cours (sous les barres)
-    if 1 <= current <= n:
-        i = current - 1
-        parts.append(f'<rect x="{x(i)+1:.1f}" y="{T:.1f}" width="{bw-2:.1f}" '
-                     f'height="{plotH:.1f}" rx="3" class="cur"/>')
-
-    # barres : prévu (référence large, neutre) + réalisé (accent, plus étroit)
+    week_cells, label_cells = [], []
     for i in range(n):
-        cx = x(i) + bw / 2
-        pw = bw * 0.62
-        ph_y = y(planned[i])
-        parts.append(f'<rect x="{cx-pw/2:.1f}" y="{ph_y:.1f}" width="{pw:.1f}" '
-                     f'height="{max(0,y(0)-ph_y):.1f}" rx="2" class="plan">'
-                     f'<title>S{i+1} prévu {planned[i]:.1f} h</title></rect>')
-        a = actual[i]
-        if a is not None and a > 0:
-            aw = bw * 0.36
-            ay = y(a)
-            parts.append(f'<rect x="{cx-aw/2:.1f}" y="{ay:.1f}" width="{aw:.1f}" '
-                         f'height="{max(0,y(0)-ay):.1f}" rx="2" class="act">'
-                         f'<title>S{i+1} réalisé {a:.1f} h</title></rect>')
+        week_cells.append(_week_col(px(planned[i]), px(actual[i]), px(nominal[i]),
+                                    PH, (i + 1) == current))
+        shown = i == 0 or (i + 1) % 4 == 0
+        label_cells.append(f'<td class="xl">{i + 1 if shown else ""}</td>')
 
-    # courbe d'ambition (template, échelle 1.0) — ligne pointillée par-dessus
-    pts = " ".join(f"{x(i)+bw/2:.1f},{y(nominal[i]):.1f}"
-                   for i in range(n) if nominal[i] is not None)
-    if pts:
-        parts.append(f'<polyline class="ceil" points="{pts}"/>')
-
-    # axe des semaines
-    parts.append(f'<line x1="{L}" y1="{y(0):.1f}" x2="{W-R}" y2="{y(0):.1f}" class="axis"/>')
-    for i in range(n):
-        if i == 0 or (i + 1) % 4 == 0:
-            parts.append(f'<text x="{x(i)+bw/2:.1f}" y="{H-9:.1f}" class="xl">{i+1}</text>')
-
-    return (f'<svg viewBox="0 0 {W} {H}" class="chart" '
-            f'preserveAspectRatio="xMidYMid meet" role="img" '
-            f'aria-label="Charge hebdomadaire : ambition, prévu et réalisé sur {n} semaines">'
-            + "".join(parts) + "</svg>")
+    return (
+        f'<p class="scale">Échelle&nbsp;: 0–{top}&nbsp;h / semaine</p>'
+        '<table class="chart" cellpadding="0" cellspacing="0" role="presentation">'
+        f'<tbody><tr class="phrow">{phase_row}</tr>'
+        f'<tr class="barrow">{"".join(week_cells)}</tr>'
+        f'<tr class="lblrow">{"".join(label_cells)}</tr></tbody></table>')
 
 
 # --------------------------------------------------------------------------- #
@@ -332,7 +330,7 @@ def build(res: AdaptResult, last: WeekSummary,
         cap=_cap_html(res, last, idx),
         tips=_tips_html(w),
         analysis=_analysis_html(analysis),
-        chart=_load_curve_svg(planned, actual_hours, idx, nominal),
+        chart=_load_curve_html(planned, actual_hours, idx, nominal),
     )
 
 
@@ -449,21 +447,20 @@ ul.trd li{{margin:.3em 0; font-size:.92rem; color:#5c6660}}
 ul.rec li{{margin:.36em 0; font-size:.94rem; font-weight:500}}
 ul.rec li::marker{{color:#157a6e}}
 
-.chart{{width:100%; height:auto; display:block; margin-top:2px}}
-.chart .band{{fill:#f1f4f1}}
-.chart .grid{{stroke:#eef1ee; stroke-width:1}}
-.chart .axis{{stroke:#dfe4df; stroke-width:1.5}}
-.chart .plan{{fill:#cfd6d0}}
-.chart .act{{fill:#157a6e}}
-.chart .ceil{{fill:none; stroke:#b67514; stroke-width:1.6; stroke-dasharray:4 3;
-  stroke-linejoin:round; stroke-linecap:round; opacity:.8}}
-.chart .cur{{fill:#fff5ed; stroke:#e0a35a; stroke-width:1; stroke-dasharray:3 2}}
-.chart .yl{{fill:#8a938c; font-size:9px; text-anchor:end; font-family:"IBM Plex Mono",monospace}}
-.chart .xl{{fill:#8a938c; font-size:9px; text-anchor:middle; font-family:"IBM Plex Mono",monospace}}
-.chart .ph{{fill:#5c6660; font-size:9px; text-anchor:middle; font-family:"Barlow Condensed",sans-serif; letter-spacing:.03em}}
+.scale{{font-size:.78rem; color:#8a938c; margin:0 0 6px}}
+.chart{{border-collapse:collapse; margin-top:2px}}
+.chart .phrow td.ph{{font-family:"Barlow Condensed",sans-serif; font-size:9px;
+  text-align:center; color:#5c6660; letter-spacing:.03em; padding-bottom:5px;
+  background:#ffffff; white-space:nowrap; overflow:hidden}}
+.chart .phrow td.ph.alt{{background:#f6f8f6}}
+.chart .barrow td{{vertical-align:bottom; padding:0}}
+.chart .barrow td.cur{{background:#fff5ed}}
+.chart .wk{{border-collapse:collapse}}
+.chart .bar{{border-collapse:collapse}}
+.chart .lblrow td.xl{{font-size:9px; text-align:center; color:#8a938c;
+  font-family:"IBM Plex Mono",monospace; padding-top:3px}}
 .legend{{display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:.84rem; color:#5c6660}}
 .legend i{{display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px}}
-.legend i.line{{height:0; border-radius:0; border-top:2px dashed #b67514; width:16px; vertical-align:3px}}
 
 footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line-height:1.6}}
 </style>
@@ -504,7 +501,7 @@ footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line
     <div class="h2">Progression — ambition, prévu &amp; réalisé</div>
     {chart}
     <div class="legend">
-      <span><i class="line"></i>Ambition (template)</span>
+      <span><i style="background:#e3c584"></i>Ambition (template)</span>
       <span><i style="background:#cfd6d0"></i>Prévu (ton volume)</span>
       <span><i style="background:#157a6e"></i>Réalisé (Strava)</span>
       <span><i style="background:#fff5ed;border:1px dashed #e0a35a"></i>Semaine en cours</span>

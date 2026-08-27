@@ -72,9 +72,14 @@ _END_DISTANCE = {"conditionTypeId": 3, "conditionTypeKey": "distance"}
 _END_LAP = {"conditionTypeId": 1, "conditionTypeKey": "lap.button"}
 _END_ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations"}
 
-# targetType : cible (allure = pace.zone, bornes en m/s ; sinon pas de cible)
+# targetType : cible (allure = pace.zone, bornes en m/s ; FC = heart.rate.zone,
+# bornes en bpm réels ; sinon pas de cible)
 _TARGET_PACE = {"workoutTargetTypeId": 6, "workoutTargetTypeKey": "pace.zone"}
+_TARGET_HR = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone"}
 _TARGET_NONE = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target"}
+
+# Convention FIT (voir workouts.py) : une cible FC est stockée en bpm + 100.
+_HR_OFFSET = 100
 
 
 # --------------------------------------------------------------------------- #
@@ -103,8 +108,16 @@ def _leaf(step) -> Dict:
         # bornes en m/s ; low = plus lent (vitesse faible), high = plus rapide.
         node["targetValueOne"] = round(step.custom_low / 1000, 3)          # mm/s -> m/s
         node["targetValueTwo"] = round(step.custom_high / 1000, 3)
-    else:
+    elif (step.target_type == Target.HEART_RATE
+            and step.custom_low is not None and step.custom_high is not None):
+        node["targetType"] = _TARGET_HR
+        node["targetValueOne"] = step.custom_low - _HR_OFFSET    # bpm+100 -> bpm réel
+        node["targetValueTwo"] = step.custom_high - _HR_OFFSET
+    elif step.target_type == Target.OPEN:
         node["targetType"] = _TARGET_NONE
+    else:
+        raise ValueError(
+            f"Target Garmin Connect non géré : {step.target_type!r} (step={step.name!r})")
     return node
 
 

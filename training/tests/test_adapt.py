@@ -55,6 +55,20 @@ class TestBands(unittest.TestCase):
         self.assertAlmostEqual(adapt._band_and_scale(0.20)[1], 0.50, places=2)
         self.assertAlmostEqual(adapt._band_and_scale(0.55)[1], 0.75, places=2)
 
+    def test_backyard_sim_not_capped_by_continuous_duration(self):
+        # [E1] revue pipeline 2026-08-26 : une simu backyard assignée au rôle
+        # "long" compte le repos dans ses minutes (12 boucles ~= 720', dont
+        # ~600' de repos) -> incomparable au temps de MOUVEMENT réel
+        # (`longest_run_s`). Le plafond anti-saut ne doit s'appliquer qu'aux
+        # séances CONTINUES (template "long"), pas aux sims.
+        w = program.week(25)  # "Répétition majeure : 12 boucles / nuit"
+        self.assertEqual(w.sessions["long"].template, "backyard")
+        res = adapt.adapt_week(w, summary(1.0, longest_min=90))
+        self.assertEqual(res.band, "nominal")
+        self.assertEqual(res.week.sessions["long"].params["loops"],
+                         w.sessions["long"].params["loops"])
+        self.assertFalse(any(a.role == "long" for a in res.adjustments))
+
     def test_rolling_longest_relaxes_cap(self):
         base = dict(n_runs=3, total_time_s=12000, total_dist_m=40000,
                     total_elev_m=300, longest_run_s=40 * 60, planned_time_s=16200)

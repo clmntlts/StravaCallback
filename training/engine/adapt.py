@@ -213,11 +213,18 @@ def adapt_week(planned: PlannedWeek, last: WeekSummary) -> AdaptResult:
 
     # 4) Plafond de la sortie longue (anti-saut) — INCONDITIONNEL hors décharge,
     #    avec un facteur dépendant de la phase (généreux en Spécifique/Pic).
+    #    [E1] Ne s'applique qu'aux séances CONTINUES (template "long") : une simu
+    #    backyard/night/runwalk assignée au rôle "long" compte le REPOS dans ses
+    #    minutes (12 boucles = 720' dont ~600' de repos), incomparable au temps
+    #    de MOUVEMENT réel `ref_long_s` — le cap étranglait systématiquement les
+    #    sims (le dashboard promettait 12/14 boucles, le .fit en encodait bien
+    #    moins). La progression backyard reste pilotée par le nombre de boucles
+    #    du plan (déjà en paliers) et par le facteur d'adhérence (étape 3).
     growth = long_growth(planned.phase)
     # rolling max des ~3 dernières semaines : une longue sautée isolée ne sur-restreint pas
     ref_long_s = max(last.longest_run_s, last.rolling_longest_s)
-    if "long" in out.sessions and ref_long_s > 0:
-        long_spec = out.sessions["long"]
+    long_spec = out.sessions.get("long")
+    if long_spec is not None and long_spec.template == "long" and ref_long_s > 0:
         cap_min = (ref_long_s / 60.0) * growth
         if workouts.minutes(long_spec) > cap_min:
             capped = _set_duration(long_spec, cap_min)
