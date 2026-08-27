@@ -1,6 +1,7 @@
 "use strict";
 
-const state = { plan: null, weekIdx: null, week: null, liveBusy: false };
+const state = { plan: null, weekIdx: null, week: null, liveBusy: false,
+  pushBusy: false, pushResult: null };
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -16,6 +17,13 @@ function bandClass(band) {
 
 async function getJSON(url) {
   const r = await fetch(url);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `${r.status} ${r.statusText}`);
+  return data;
+}
+
+async function postJSON(url) {
+  const r = await fetch(url, { method: "POST" });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || `${r.status} ${r.statusText}`);
   return data;
@@ -45,6 +53,7 @@ async function loadWeek(idx, live) {
     const url = `/api/week/${idx}` + (live ? "?live=1" : "");
     state.week = await getJSON(url);
     state.weekIdx = idx;
+    state.pushResult = null;
   } catch (e) {
     body.textContent = `Erreur : ${e.message}`;
     body.classList.remove("loading");
@@ -142,11 +151,41 @@ function renderWeekView() {
           <thead><tr><th>Jour</th><th>Séance</th><th style="text-align:right">Durée</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+          <button class="live-btn" id="wk-push" ${state.pushBusy ? "disabled" : ""}>
+            ${state.pushBusy ? "Envoi…" : "Planifier sur Garmin"}
+          </button>
+        </div>
+        ${renderPushResult()}
       </div>
       ${adj}
       ${analysis}
     </div>`;
   wireWeekNav();
+}
+
+function renderPushResult() {
+  const res = state.pushResult;
+  if (!res) return "";
+  if (res.error) {
+    return `<div class="banner warn" style="margin-top:12px">${esc(res.error)}</div>`;
+  }
+  if (!res.configured) {
+    return `<div class="banner muted" style="margin-top:12px">
+      Garmin non configuré (ni Training API officielle, ni Garmin Connect) —
+      voir <code>training/RUNBOOK.md</code>.</div>`;
+  }
+  if (res.detail) {
+    return `<div class="banner warn" style="margin-top:12px">
+      ${esc(res.via)} : ${esc(res.detail)}</div>`;
+  }
+  const rows = res.results.map((r) => `
+    <li>${r.ok ? "✓" : "✗"} <strong>${esc(r.date)}</strong> ${esc(r.label)}
+      <span style="color:var(--muted)"> · ${esc(r.detail)}</span></li>`).join("");
+  return `<div class="banner ${res.ok ? "muted" : "warn"}" style="margin-top:12px">
+    <div>Voie : <strong>${esc(res.via)}</strong></div>
+    <ul class="adj" style="margin-top:6px">${rows}</ul>
+  </div>`;
 }
 
 function wireWeekNav() {
@@ -167,6 +206,18 @@ function wireWeekNav() {
       await loadWeek(state.weekIdx, true);
     } finally {
       state.liveBusy = false;
+    }
+  });
+  document.getElementById("wk-push")?.addEventListener("click", async () => {
+    state.pushBusy = true;
+    renderWeekView();
+    try {
+      state.pushResult = await postJSON(`/api/week/${state.weekIdx}/push-garmin`);
+    } catch (e) {
+      state.pushResult = { error: e.message };
+    } finally {
+      state.pushBusy = false;
+      renderWeekView();
     }
   });
 }

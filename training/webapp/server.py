@@ -24,7 +24,7 @@ if HERE not in sys.path:
 from flask import Flask, Response, jsonify, request, send_from_directory  # noqa: E402
 
 import generate                                                          # noqa: E402
-from engine import coach, config, program, report, strava, workouts      # noqa: E402
+from engine import coach, config, program, push, report, strava, workouts  # noqa: E402
 from engine.fit_encoder import encode as encode_fit                      # noqa: E402
 from engine.models import ordered_roles                                 # noqa: E402
 
@@ -126,5 +126,13 @@ def create_app() -> "Flask":
         data = encode_fit(workouts.build_workout(spec))
         return Response(data, mimetype="application/octet-stream",
                         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+    @app.post("/api/week/<int:idx>/push-garmin")
+    def api_week_push_garmin(idx):
+        res = _week_cache.get(idx)
+        if res is None:
+            return jsonify({"error": "charge d'abord la semaine "
+                                     "(GET /api/week/<idx>)"}), 409
+        return jsonify(push.push_week(res, idx, via="auto"))
 
     return app

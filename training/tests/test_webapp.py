@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -122,6 +123,41 @@ class TestRoutes(unittest.TestCase):
         self.client.get(f"/api/week/{idx}")  # peuple le cache
         r = self.client.get(f"/api/week/{idx}/fit/does-not-exist")
         self.assertEqual(r.status_code, 404)
+
+
+@unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
+class TestPushGarminRoute(unittest.TestCase):
+    """`engine.push.push_week` est monkeypatché : jamais de vrai réseau/session
+    Garmin ici (cette machine a une session Garmin Connect RÉELLE en local)."""
+
+    def setUp(self):
+        from webapp import server
+        server._week_cache.clear()
+        self.server = server
+        self.client = server.create_app().test_client()
+
+    def test_push_requires_week_loaded_first(self):
+        r = self.client.post("/api/week/1/push-garmin")
+        self.assertEqual(r.status_code, 409)
+
+    @patch("webapp.server.push.push_week")
+    def test_push_forwards_cached_result(self, mock_push_week):
+        mock_push_week.return_value = {
+            "via": "training-api", "configured": True, "ok": True,
+            "detail": None, "results": [{"role": "easy", "date": "2026-09-15",
+                                         "label": "Facile 40'", "ok": True,
+                                         "detail": "id wid-1"}],
+        }
+        self.client.get("/api/week/4")  # peuple le cache
+        r = self.client.post("/api/week/4/push-garmin")
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertEqual(data["via"], "training-api")
+        self.assertTrue(data["ok"])
+        mock_push_week.assert_called_once()
+        args, kwargs = mock_push_week.call_args
+        self.assertEqual(args[1], 4)
+        self.assertEqual(kwargs.get("via", args[2] if len(args) > 2 else None), "auto")
 
 
 if __name__ == "__main__":

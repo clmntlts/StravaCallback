@@ -71,15 +71,11 @@ def _load_dotenv(path):
 _load_dotenv(os.path.join(HERE, ".env"))
 
 from engine import (adapt, coach, config, dashboard, deliver, garmin,            # noqa: E402
-                    garmin_connect, garmin_workout, program, report, strava,
-                    workouts)
+                    garmin_connect, program, push, report, strava, workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
 WORKOUTS_DIR = os.path.join(HERE, "workouts")
-
-# Décalage (jours) du rôle par rapport au lundi de la semaine (week_start)
-ROLE_OFFSET = {"quality": 1, "easy": 3, "long": 5, "b2b": 6}  # Mar/Jeu/Sam/Dim
 
 
 # --------------------------------------------------------------------------- #
@@ -174,28 +170,28 @@ def _resolve_week(args, today):
     return program.target_week_index(today)
 
 
+def _print_push_results(results, ok_fmt="  ✓ {date}  {label}  ({detail})",
+                        err_fmt="  ✗ {date}  {label} — {detail}"):
+    for r in results:
+        fmt = ok_fmt if r["ok"] else err_fmt
+        print(fmt.format(**r))
+
+
 def _push_garmin(res, idx):
-    """Crée + planifie chaque séance sur Garmin (si configuré). Repli sinon."""
-    if not garmin.is_configured():
+    """Crée + planifie chaque séance sur la Training API officielle (si
+    configurée). Repli sinon. Ne fait plus que l'affichage : la logique de
+    sélection/push vit dans engine/push.py (partagée avec la route web)."""
+    result = push.push_week(res, idx, via="training-api")
+    if not result["configured"]:
         print("\n[garmin] non configuré (GARMIN_CONSUMER_KEY/SECRET/REFRESH_TOKEN) "
               "— push ignoré, email/FIT conservés.")
         return
-    try:
-        token = garmin.get_access_token()
-    except Exception as e:
-        print(f"\n[garmin] échec d'authentification : {e}\n"
+    if result["detail"] is not None:
+        print(f"\n[garmin] échec d'authentification : {result['detail']}\n"
               "         push ignoré, email/FIT conservés.")
         return
     print("\n[garmin] planification des séances :")
-    for role in ordered_roles(res.week.sessions):
-        spec = res.week.sessions[role]
-        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
-        try:
-            wid = garmin.push_and_schedule(garmin_workout.session_to_garmin(spec), d,
-                                           access_token=token)
-            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
-        except Exception as e:
-            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+    _print_push_results(result["results"])
 
 
 def _push_garmin_connect(res, idx):
@@ -203,27 +199,20 @@ def _push_garmin_connect(res, idx):
 
     C'est la planification qui fait apparaître la séance comme *séance du jour*
     à date fixe sur la montre. Repli propre si non configuré / lib absente.
+    Ne fait plus que l'affichage : la logique de sélection/push vit dans
+    engine/push.py (partagée avec la route web).
     """
-    if not garmin_connect.is_configured():
+    result = push.push_week(res, idx, via="connect")
+    if not result["configured"]:
         print("\n[garmin-connect] non configuré (GARMIN_EMAIL / GARMIN_PASSWORD) "
               "— planification ignorée, email/FIT conservés.")
         return
-    try:
-        client = garmin_connect.login()
-    except Exception as e:
-        print(f"\n[garmin-connect] connexion impossible : {e}\n"
+    if result["detail"] is not None:
+        print(f"\n[garmin-connect] connexion impossible : {result['detail']}\n"
               "                 planification ignorée, email/FIT conservés.")
         return
     print("\n[garmin-connect] planification au calendrier :")
-    for role in ordered_roles(res.week.sessions):
-        spec = res.week.sessions[role]
-        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
-        try:
-            wid, client = garmin_connect.push_and_schedule(
-                garmin_connect.session_to_connect(spec), d, client=client)
-            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
-        except Exception as e:
-            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+    _print_push_results(result["results"])
 
 
 def _print_summary(res, files, outdir):
