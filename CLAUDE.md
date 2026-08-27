@@ -1,7 +1,17 @@
 # StravaCallback — guide projet (Claude)
 
-Callback OAuth Strava (Vercel + Botpress) **et** moteur d'entraînement adaptatif
-backyard ultra sous `training/` (voir `training/README.md` et `training/RUNBOOK.md`).
+Moteur d'entraînement adaptatif backyard ultra sous `training/` (voir
+`training/README.md` et `training/RUNBOOK.md`) : plan macro, adaptation
+hebdomadaire au réalisé Strava, génération de `.fit`, envoi email et
+planification Garmin. Automatisation locale (cron/Tâche planifiée) via la
+Routine hebdo (`/weekly`). Interface web locale optionnelle : `training/webapp/`
+(`python3 training/generate.py serve`) — dashboard interactif, téléchargement
+`.fit`, push Garmin ; reste local uniquement, jamais hébergée (voir
+`training/RUNBOOK.md`).
+
+L'ancien callback OAuth Strava (Vercel + Botpress) a été retiré (commit
+`8249e3c`, 2026-08-24) : l'auth Strava est désormais CLI-only
+(`generate.py strava-auth-url` / `strava-auth-exchange`).
 
 ## 📌 Suivi des développements en cours → GitHub Issues (obligatoire)
 

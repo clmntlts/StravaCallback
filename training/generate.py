@@ -446,6 +446,22 @@ def cmd_garmin_connect_token(args):
           "traite-le comme un mot de passe.")
 
 
+def cmd_serve(args):
+    """Lance l'interface web locale (dashboard, téléchargement .fit, push
+    Garmin). Import PARESSEUX : Flask ne doit jamais être requis pour les
+    autres sous-commandes ni pour la suite de tests."""
+    try:
+        from webapp.server import create_app
+    except ImportError as e:
+        raise SystemExit(f"Flask manquant : {e}\n"
+                         "Installe la dépendance optionnelle : "
+                         "pip install -r training/requirements-web.txt")
+    app = create_app()
+    port = args.port or 5000
+    print(f"Interface web locale : http://127.0.0.1:{port}  (local uniquement, Ctrl+C pour arrêter)")
+    app.run(host="127.0.0.1", port=port, debug=False)
+
+
 def cmd_config(args):
     c = config.summary()
     print("Profil athlète (mémoire intersessions) :")
@@ -498,6 +514,10 @@ def main(argv=None):
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
     sub.add_parser("config", help="Affiche le profil athlète effectif").set_defaults(func=cmd_config)
+
+    psv = sub.add_parser("serve", help="Lance l'interface web locale (dashboard, .fit, push Garmin)")
+    psv.add_argument("--port", type=int, default=5000)
+    psv.set_defaults(func=cmd_serve)
 
     po = sub.add_parser("onboard", help="Écrit le profil athlète (athlete.json) et marque onboarded")
     po.add_argument("--objective")

@@ -225,6 +225,26 @@ l'onboarding.
 Sans ces variables, `generate.py send --live` s'arrête avec un message explicite.
 Pour tester hors-ligne : `python3 generate.py send --activities tests/fixtures/last_week_sample.json --today 2026-09-14 --dry-run`.
 
+## Interface web locale (optionnelle)
+
+Dashboard interactif dans le navigateur, en plus (pas à la place) de l'email
+hebdo et de la CLI : vue du plan complet, vue semaine avec KPIs/ajustements,
+téléchargement `.fit` par séance en un clic, push Garmin. **Local uniquement**
+(`127.0.0.1`) — jamais hébergée publiquement, entre autres pour rester sur IP
+résidentielle côté Garmin (cf. push Garmin Connect ci-dessous, et issue #14).
+
+```bash
+pip install -r training/requirements-web.txt   # Flask, seule dépendance
+python3 training/generate.py serve             # http://127.0.0.1:5000
+# ou : python3 training/generate.py serve --port 5050
+```
+
+N'a aucun effet sur la Routine hebdo (cron/Tâche planifiée) : deux surfaces
+indépendantes sur le même moteur. Le chat (Q&A sur le plan, onboarding) prévu
+pour cette interface s'appuiera sur la CLI `claude` déjà installée en local
+(pas de clé API Anthropic séparée, pas de facturation à part — même mécanisme
+que la Routine hebdo qui invoque `claude -p "/weekly"`).
+
 ## Push Garmin (API officielle, Training API)
 
 Livraison directe sur la montre (calendrier Garmin Connect) au lieu de l'import
