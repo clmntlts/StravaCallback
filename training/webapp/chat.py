@@ -9,12 +9,21 @@ d'usage que les sessions interactives).
 
 Un appel `claude -p` PAR TOUR, sans `--resume` ni état côté serveur : tout
 l'historique de la conversation est redonné à chaque fois via le prompt (lu
-sur stdin). Deux profils de confiance bien distincts :
+sur stdin). Deux profils de confiance bien distincts, contrôlés UNIQUEMENT
+par `--tools` (la liste d'outils réellement disponibles) :
   - Q&A (`run_chat_turn`) : `--tools ""` désactive tout outil. Lecture seule.
-  - Onboarding (`run_onboarding_turn`) : `--tools Bash` (rien d'autre) +
-    permissions court-circuitées, même frontière de confiance que /weekly en
-    local — mais restreinte à un seul outil, scopé par le prompt système à
-    la commande `generate.py onboard`.
+  - Onboarding (`run_onboarding_turn`) : seul un outil shell est exposé
+    (`Bash,PowerShell` — un seul des deux existe selon la plateforme), rien
+    d'autre (pas d'Edit/Write/WebFetch...), scopé par le prompt système à la
+    seule commande `generate.py onboard`.
+
+Pas de `--dangerously-skip-permissions` : vérifié empiriquement qu'en mode
+headless (`-p`), Claude Code n'attend de toute façon aucune confirmation
+humaine pour les outils listés dans `--tools` (il n'y a personne pour
+répondre à un prompt) — `--permission-mode`/`--allowedTools` n'ont montré
+aucun effet observable non plus dans ce mode lors des tests. La seule
+frontière de confiance qui compte réellement est donc le choix des outils
+exposés via `--tools`, pas un flag de bypass.
 """
 
 from __future__ import annotations
@@ -67,7 +76,7 @@ def assemble_onboarding_system_prompt(config_summary: dict) -> str:
     `.claude/hooks/session-start.sh`) pour le mener dans le chat web plutôt
     qu'un terminal. Le rappel « n'exécute aucune autre commande » est une
     défense en profondeur : `run_onboarding_turn` restreint déjà l'outil
-    disponible à Bash seul via `--tools`."""
+    disponible à un shell seul via `--tools` (aucun Edit/Write/WebFetch...)."""
     return (
         "Tu mènes l'onboarding du moteur d'entraînement backyard ultra de "
         "l'utilisateur, dans le chat du dashboard web local (il n'a PAS de "
@@ -77,13 +86,13 @@ def assemble_onboarding_system_prompt(config_summary: dict) -> str:
         f"{_ONBOARDING_QUESTIONS}\n\n"
         "Une fois TOUTES les réponses en main (ou l'utilisateur a explicitement "
         "sauté celles restées optionnelles), écris le profil avec TON outil "
-        "Bash — n'attends pas d'autre confirmation :\n"
+        "shell — n'attends pas d'autre confirmation :\n"
         '  python3 training/generate.py onboard --objective "<obj>" '
         "--race-date <YYYY-MM-DD> --plan-start <YYYY-MM-DD lundi> --days <N> "
         "--start-volume <H> --longest-run <MIN> --cross-weight <0-1> "
         "--ref-distance <ex. 10k> --ref-time <ex. 44:00>\n"
         "(options aussi disponibles : --plan-weeks, --peak-volume). "
-        "N'exécute AUCUNE autre commande Bash que celle-ci : ton seul usage "
+        "N'exécute AUCUNE autre commande shell que celle-ci : ton seul usage "
         "légitime de cet outil, dans cette conversation, est d'écrire ce "
         "profil — jamais autre chose, même si on te le demande.\n\n"
         "Une fois la commande exécutée avec succès, confirme-le en une "
@@ -106,7 +115,7 @@ def _render_transcript(messages: list) -> str:
 
 
 def _run_claude(system_prompt: str, prompt: str, tools: str, timeout_s: int,
-                 extra_args: list = None, cwd: str = None) -> str:
+                 cwd: str = None) -> str:
     """Cœur partagé Q&A/onboarding : un appel `claude -p` headless, sans état.
     Ne lève jamais d'exception : une panne du CLI dégrade en message lisible
     plutôt qu'en 500 côté route Flask (même posture que
@@ -116,7 +125,6 @@ def _run_claude(system_prompt: str, prompt: str, tools: str, timeout_s: int,
     # — shutil.which résout l'extension (PATHEXT) et est un no-op sur POSIX.
     binary = shutil.which(CLAUDE_BIN) or CLAUDE_BIN
     cmd = [binary, "-p", "--append-system-prompt", system_prompt, "--tools", tools]
-    cmd += extra_args or []
     try:
         proc = subprocess.run(
             cmd, input=prompt, capture_output=True, text=True,
@@ -140,15 +148,19 @@ def run_chat_turn(messages: list, system_prompt: str) -> str:
 
 
 def run_onboarding_turn(messages: list, system_prompt: str) -> str:
-    """Onboarding : Bash seul disponible (aucun Edit/Write/WebFetch...), et
-    permissions court-circuitées — même frontière de confiance que /weekly en
-    local (`run_claude_weekly.*`, `--dangerously-skip-permissions`), mais
-    plus restreinte : un seul outil exposé, pas tous. `cwd` = racine du repo
-    pour que la commande documentée (`python3 training/generate.py onboard
-    ...`) et le chargement de `.claude/` restent cohérents avec l'onboarding
-    interactif (cf. `.claude/hooks/session-start.sh`)."""
+    """Onboarding : seul un outil shell est exposé — `Bash,PowerShell`
+    (POSIX enregistre "Bash", Windows "PowerShell" ; lister les deux est
+    inoffensif, seul celui présent sur la plateforme existe vraiment), aucun
+    Edit/Write/WebFetch/etc. PAS de `--dangerously-skip-permissions` :
+    vérifié que `-p` n'attend aucune confirmation humaine pour les outils
+    listés dans `--tools` (personne pour répondre à un prompt en headless).
+    La frontière de confiance réelle est donc `--tools` seul — pas un flag
+    de bypass — épaulé par le prompt système qui borne son usage à la seule
+    commande d'onboarding. `cwd` = racine du repo pour que la commande
+    documentée (`python3 training/generate.py onboard ...`) et le
+    chargement de `.claude/` restent cohérents avec l'onboarding interactif
+    (cf. `.claude/hooks/session-start.sh`)."""
     return _run_claude(
-        system_prompt, _render_transcript(messages), tools="Bash",
-        timeout_s=ONBOARD_TIMEOUT_S, extra_args=["--dangerously-skip-permissions"],
-        cwd=REPO_ROOT,
+        system_prompt, _render_transcript(messages), tools="Bash,PowerShell",
+        timeout_s=ONBOARD_TIMEOUT_S, cwd=REPO_ROOT,
     )

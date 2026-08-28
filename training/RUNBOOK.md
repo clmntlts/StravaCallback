@@ -257,11 +257,14 @@ shelle out vers la CLI `claude` **déjà installée en local et authentifiée**
   profil ») : reprend les questions de l'onboarding interactif
   (objectif, date de course, jours/semaine, volume, allures…) directement
   dans le chat. Une fois les réponses réunies, l'agent écrit le profil
-  lui-même via `python3 training/generate.py onboard …` — même frontière de
-  confiance que la Routine hebdo (`--dangerously-skip-permissions`), mais
-  restreinte au seul outil Bash (aucun autre), et le prompt système le borne
-  explicitement à cette unique commande. Le dashboard recharge
-  automatiquement le plan dès que `athlete.json` a été réécrit.
+  lui-même via `python3 training/generate.py onboard …` — seul un outil
+  shell est donné à l'agent pour ce mode (aucun Edit/Write/WebFetch/…), et le
+  prompt système le borne explicitement à cette unique commande. Pas de
+  `--dangerously-skip-permissions` : en mode headless, `claude -p` n'attend
+  de toute façon aucune confirmation humaine pour les outils listés — la
+  frontière de confiance tient donc au choix de l'outil exposé, pas à un
+  bypass. Le dashboard recharge automatiquement le plan dès qu'`athlete.json`
+  a été réécrit.
 
 ## Push Garmin (API officielle, Training API)
 

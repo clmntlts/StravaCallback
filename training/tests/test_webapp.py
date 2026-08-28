@@ -227,10 +227,10 @@ class TestChatRunTurn(unittest.TestCase):
 
 class TestOnboardingRunTurn(unittest.TestCase):
     """`subprocess.run` monkeypatché : jamais de vrai appel `claude` ici — un
-    vrai appel aurait Bash + permissions court-circuitées sur cette machine."""
+    vrai appel toucherait athlete.json, le profil réel de cette machine."""
 
     @patch("webapp.chat.subprocess.run")
-    def test_uses_bash_only_skips_permissions_and_repo_root_cwd(self, mock_run):
+    def test_uses_shell_tool_only_no_bypass_flag_and_repo_root_cwd(self, mock_run):
         from webapp import chat
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="Profil enregistré.\n", stderr="")
@@ -241,8 +241,13 @@ class TestOnboardingRunTurn(unittest.TestCase):
         cmd = args[0]
         self.assertEqual(cmd[1], "-p")
         self.assertIn("--tools", cmd)
-        self.assertEqual(cmd[cmd.index("--tools") + 1], "Bash")  # jamais "" ni "default"
-        self.assertIn("--dangerously-skip-permissions", cmd)
+        # Bash (POSIX) et PowerShell (Windows) : un seul des deux existe vraiment
+        # selon la plateforme, mais jamais "" (Q&A) ni "default" (tout ouvert).
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "Bash,PowerShell")
+        # Pas de --dangerously-skip-permissions : vérifié que -p n'attend aucune
+        # confirmation humaine pour les outils listés dans --tools (personne pour
+        # répondre en headless) — le flag n'apportait donc aucune protection réelle.
+        self.assertNotIn("--dangerously-skip-permissions", cmd)
         self.assertEqual(kwargs["cwd"], chat.REPO_ROOT)
 
     @patch("webapp.chat.subprocess.run")
