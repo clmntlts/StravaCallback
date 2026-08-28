@@ -10,6 +10,7 @@ l'ordre d'exécution de `discover`.
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -158,6 +159,95 @@ class TestPushGarminRoute(unittest.TestCase):
         args, kwargs = mock_push_week.call_args
         self.assertEqual(args[1], 4)
         self.assertEqual(kwargs.get("via", args[2] if len(args) > 2 else None), "auto")
+
+
+@unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
+class TestChatAssembleSystemPrompt(unittest.TestCase):
+    def test_includes_all_three_contexts(self):
+        from webapp import chat
+        prompt = chat.assemble_system_prompt(
+            {"week": 7, "phase": "Fondation"},
+            {"objective": "24 tours", "weeks": 34},
+            {"objective": "24 tours", "days_per_week": 4},
+        )
+        self.assertIn("Fondation", prompt)
+        self.assertIn("34", prompt)
+        self.assertIn("days_per_week", prompt)
+
+
+class TestChatRunTurn(unittest.TestCase):
+    """`subprocess.run` monkeypatché : jamais de vrai appel `claude` ici."""
+
+    @patch("webapp.chat.subprocess.run")
+    def test_builds_expected_command_and_returns_stdout(self, mock_run):
+        from webapp import chat
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="Repos bien mérité cette semaine.\n", stderr="")
+        reply = chat.run_chat_turn(
+            [{"role": "user", "content": "Comment est ma semaine ?"}], "SYSTEM-PROMPT")
+        self.assertEqual(reply, "Repos bien mérité cette semaine.")
+        args, kwargs = mock_run.call_args
+        cmd = args[0]
+        self.assertEqual(cmd[1], "-p")  # cmd[0] = binaire résolu (shutil.which), varie selon la machine
+        self.assertIn("--append-system-prompt", cmd)
+        self.assertEqual(cmd[cmd.index("--append-system-prompt") + 1], "SYSTEM-PROMPT")
+        self.assertIn("--tools", cmd)
+        self.assertIn("Comment est ma semaine ?", kwargs["input"])
+
+    @patch("webapp.chat.subprocess.run")
+    def test_nonzero_exit_degrades_to_message(self, mock_run):
+        from webapp import chat
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="boom")
+        reply = chat.run_chat_turn([{"role": "user", "content": "hi"}], "SYS")
+        self.assertIn("boom", reply)
+
+    @patch("webapp.chat.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=1))
+    def test_timeout_degrades_to_message(self, mock_run):
+        from webapp import chat
+        reply = chat.run_chat_turn([{"role": "user", "content": "hi"}], "SYS")
+        self.assertIn("timeout", reply.lower())
+
+    @patch("webapp.chat.subprocess.run", side_effect=FileNotFoundError())
+    def test_missing_binary_degrades_to_message(self, mock_run):
+        from webapp import chat
+        reply = chat.run_chat_turn([{"role": "user", "content": "hi"}], "SYS")
+        self.assertIn("introuvable", reply)
+
+
+@unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
+class TestChatRoute(unittest.TestCase):
+    def setUp(self):
+        from webapp import server
+        server._week_cache.clear()
+        self.server = server
+        self.client = server.create_app().test_client()
+
+    def test_missing_messages_is_400(self):
+        r = self.client.post("/api/chat", json={})
+        self.assertEqual(r.status_code, 400)
+
+    def test_week_out_of_range_is_404(self):
+        from engine import program
+        r = self.client.post("/api/chat", json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "week_idx": program.N_WEEKS + 1,
+        })
+        self.assertEqual(r.status_code, 404)
+
+    @patch("webapp.server.chat.run_chat_turn")
+    def test_forwards_reply_and_defaults_week_to_current(self, mock_run_chat_turn):
+        mock_run_chat_turn.return_value = "Tout va bien."
+        r = self.client.post("/api/chat", json={
+            "messages": [{"role": "user", "content": "Comment se passe la semaine ?"}],
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["reply"], "Tout va bien.")
+        mock_run_chat_turn.assert_called_once()
+        messages_arg, system_prompt_arg = mock_run_chat_turn.call_args[0]
+        self.assertEqual(messages_arg[0]["content"], "Comment se passe la semaine ?")
+        self.assertIsInstance(system_prompt_arg, str)
+        self.assertIn("Semaine courante", system_prompt_arg)
 
 
 if __name__ == "__main__":

@@ -248,17 +248,18 @@ function renderPlanView() {
 // Onglets
 // --------------------------------------------------------------------------
 function wireTabs() {
-  const tabWeek = document.getElementById("tab-week");
-  const tabPlan = document.getElementById("tab-plan");
-  const viewWeek = document.getElementById("view-week");
-  const viewPlan = document.getElementById("view-plan");
-  tabWeek.addEventListener("click", () => {
-    tabWeek.classList.add("active"); tabPlan.classList.remove("active");
-    viewWeek.style.display = ""; viewPlan.style.display = "none";
-  });
-  tabPlan.addEventListener("click", () => {
-    tabPlan.classList.add("active"); tabWeek.classList.remove("active");
-    viewPlan.style.display = ""; viewWeek.style.display = "none";
+  const tabs = [
+    { tab: "tab-week", view: "view-week" },
+    { tab: "tab-plan", view: "view-plan" },
+    { tab: "tab-chat", view: "view-chat" },
+  ].map((t) => ({ tabEl: document.getElementById(t.tab), viewEl: document.getElementById(t.view) }));
+  tabs.forEach(({ tabEl, viewEl }) => {
+    tabEl.addEventListener("click", () => {
+      tabs.forEach((o) => {
+        o.tabEl.classList.toggle("active", o.tabEl === tabEl);
+        o.viewEl.style.display = o.tabEl === tabEl ? "" : "none";
+      });
+    });
   });
 }
 

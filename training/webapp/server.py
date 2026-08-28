@@ -27,6 +27,7 @@ import generate                                                          # noqa:
 from engine import coach, config, program, push, report, strava, workouts  # noqa: E402
 from engine.fit_encoder import encode as encode_fit                      # noqa: E402
 from engine.models import ordered_roles                                 # noqa: E402
+from webapp import chat                                                 # noqa: E402
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -134,5 +135,23 @@ def create_app() -> "Flask":
             return jsonify({"error": "charge d'abord la semaine "
                                      "(GET /api/week/<idx>)"}), 409
         return jsonify(push.push_week(res, idx, via="auto"))
+
+    @app.post("/api/chat")
+    def api_chat():
+        body = request.get_json(silent=True) or {}
+        messages = body.get("messages")
+        if not messages:
+            return jsonify({"error": "messages manquant ou vide"}), 400
+        idx = body.get("week_idx") or program.target_week_index(date.today())
+        if not (1 <= idx <= program.N_WEEKS):
+            return jsonify({"error": f"semaine {idx} hors programme "
+                                     f"(1..{program.N_WEEKS})"}), 404
+        res, last, actuals, analysis = generate._prepare_week(idx, None, date.today())
+        _week_cache[idx] = res
+        week_json = report.week_report_json(res, last, _files_for_week(res), analysis)
+        system_prompt = chat.assemble_system_prompt(
+            week_json, report.plan_meta_json(), config.summary())
+        reply = chat.run_chat_turn(messages, system_prompt)
+        return jsonify({"reply": reply})
 
     return app
