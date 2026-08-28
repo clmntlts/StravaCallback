@@ -207,8 +207,9 @@ def _target_weeks() -> int:
 
 _ACTIVE_ROWS = _select(_ROWS, _target_weeks())
 N_WEEKS = len(_ACTIVE_ROWS)
-COMPRESSED = N_WEEKS < TEMPLATE_WEEKS   # plan raccourci → décharges re-placées à alléger
-DELOAD_SCALE = 0.6                      # allègement d'une semaine de décharge re-placée
+DELOAD_TARGET_FRAC = 0.60               # décharge indexée sur ~60 % des 3 dernières sem. "build"
+SMOOTH_CAP = 1.4                        # hausse hebdo max hors rebond post-décharge
+SMOOTH_CAP_POST_DELOAD = 1.8            # hausse hebdo max tolérée juste après une décharge
 
 
 # --------------------------------------------------------------------------- #
@@ -254,10 +255,6 @@ def _build_week(row, scale: float = None, days: int = None) -> PlannedWeek:
     idx, phase, deload, note = row[0], row[1], row[2], row[3]
     roles = _roles_for_days(days) if days is not None else _ACTIVE_ROLES
     sc = VOLUME_SCALE if scale is None else scale
-    # En plan compressé, les décharges sont re-placées par position et portent des
-    # séances "build" → on les allège réellement.
-    if COMPRESSED and deload:
-        sc *= DELOAD_SCALE
     sessions = {r: spec for r, spec in _base_row_sessions(row).items() if r in roles}
     if sc != 1.0:
         sessions = {r: adapt._scaled_spec(spec, sc) for r, spec in sessions.items()}
@@ -272,21 +269,8 @@ def _rescale_week(w, f):
     w.sessions = {r: adapt._scaled_spec(s, f) for r, s in w.sessions.items()}
 
 
-def _smooth_volume(weeks):
-    """Plafonne la hausse de volume hebdo total (anti-saut de charge). Un rebond
-    plus large est toléré au sortir d'une décharge. Appliqué aux plans compressés,
-    où le rééchantillonnage peut créer des sauts ; le plan complet garde ses gros
-    blocs volontaires (post-décharge)."""
-    prev_h, prev_deload = None, False
-    for w in weeks:
-        h = _hours(w)
-        if prev_h and prev_h > 0 and not w.deload:
-            cap = 1.8 if prev_deload else 1.4
-            if h > prev_h * cap:
-                _rescale_week(w, (prev_h * cap) / h)
-                h = _hours(w)
-        prev_h, prev_deload = h, w.deload
-    return weeks
+def _has_backyard(w) -> bool:
+    return any(s.template == "backyard" for s in w.sessions.values())
 
 
 def _cap_peak(weeks, peak_h):
@@ -298,9 +282,45 @@ def _cap_peak(weeks, peak_h):
     return weeks
 
 
-PROGRAM: List[PlannedWeek] = [_build_week(r) for r in _ACTIVE_ROWS]
-if COMPRESSED:
-    PROGRAM = _smooth_volume(PROGRAM)
+def _build_program() -> List[PlannedWeek]:
+    """Construit le plan semaine après semaine, gouverneurs de charge actifs sur
+    TOUT plan (compressé ou nominal) :
+      - décharge indexée sur la charge réellement portée juste avant [E5], pas sur
+        la valeur fixe du template (sur-décharge sinon, rebond qui rattrape tout) ;
+      - b2b plafonné en progression semaine-à-semaine, miroir du cap "long"
+        d'adapt.py [E9] ;
+      - volume hebdo total lissé (anti-saut) [E4], SAUF sur une semaine de simu
+        backyard : sa progression est pilotée par le nombre de boucles du
+        template, pas par les heures totales — un lissage aveugle la raboterait
+        en boucles et recasserait le découplage [E1] (bf2e664)."""
+    built: List[PlannedWeek] = []
+    for row in _ACTIVE_ROWS:
+        w = _build_week(row)
+        if w.deload:
+            prev_builds = [x for x in built if not x.deload][-3:]
+            if prev_builds:
+                target_h = (sum(_hours(x) for x in prev_builds) / len(prev_builds)) * DELOAD_TARGET_FRAC
+                h = _hours(w)
+                if h > 0:
+                    _rescale_week(w, target_h / h)
+        elif built:
+            prev = built[-1]
+            if "b2b" in w.sessions and "b2b" in prev.sessions:
+                prev_min = workouts.minutes(prev.sessions["b2b"])
+                cap_min = prev_min * adapt.long_growth(w.phase)
+                if workouts.minutes(w.sessions["b2b"]) > cap_min > 0:
+                    w.sessions["b2b"] = adapt._set_duration(w.sessions["b2b"], cap_min)
+            if not _has_backyard(w):
+                prev_h = _hours(prev)
+                cap = SMOOTH_CAP_POST_DELOAD if prev.deload else SMOOTH_CAP
+                h = _hours(w)
+                if prev_h > 0 and h > prev_h * cap:
+                    _rescale_week(w, (prev_h * cap) / h)
+        built.append(w)
+    return built
+
+
+PROGRAM: List[PlannedWeek] = _build_program()
 if config.PEAK_VOLUME_H:
     PROGRAM = _cap_peak(PROGRAM, config.PEAK_VOLUME_H)
 

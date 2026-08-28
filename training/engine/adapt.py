@@ -41,9 +41,9 @@ LONG_GROWTH_DEFAULT = 1.20
 LONG_GROWTH_BY_PHASE = {
     "Fondation": 1.20,
     "Force-endurance": 1.35,
-    "Spécifique": 1.60,
-    "Pic": 1.60,
-    "Affûtage": 1.20,
+    "Spécifique": 1.30,   # [E8] resserré (était 1.60, 3-6x la norme sûre sur la
+    "Pic": 1.30,           # séance continue la plus traumatisante) ; le découplage
+    "Affûtage": 1.20,      # backyard [E1] reste intact (template != "long" ici)
 }
 
 # Seuils ACWR (partagés avec le dashboard)

@@ -324,6 +324,70 @@ class TestAthleteConfig(unittest.TestCase):
                          program.TEMPLATE_WEEKS)
 
 
+class TestVolumeGovernor(unittest.TestCase):
+    """[E2/E4/E5/E9] gouverneurs de charge actifs sur le plan nominal complet."""
+
+    def test_deloads_indexed_on_recent_load(self):
+        # Une décharge ayant >=1 semaine "build" avant elle doit être proche de
+        # DELOAD_TARGET_FRAC x (moyenne des 3 dernières semaines "build") --
+        # pas figée à la valeur brute du template, indépendamment de la charge
+        # portée juste avant [E5].
+        built = []
+        for w in program.PROGRAM:
+            if w.deload:
+                prev_builds = [x for x in built if not x.deload][-3:]
+                if prev_builds:
+                    target = (sum(program.planned_hours(x) for x in prev_builds)
+                              / len(prev_builds)) * program.DELOAD_TARGET_FRAC
+                    self.assertAlmostEqual(program.planned_hours(w), target, delta=0.5)
+            built.append(w)
+
+    def test_no_jump_beyond_cap_outside_backyard_weeks(self):
+        # [E4] anti-saut de charge hebdo total, actif même sur le plan non
+        # compressé -- sauf sur une semaine de simu backyard (progression pilotée
+        # par le nombre de boucles, pas par les heures totales, cf. [E1]).
+        # Tolérance 0.15h : l'arrondi par séance (reps entiers, minutes/5) du
+        # rééchantillonnage peut légèrement dépasser le plafond mathématique
+        # exact sans que ce soit un vrai saut de charge.
+        prev = None
+        for w in program.PROGRAM:
+            if prev is not None and not w.deload and not program._has_backyard(w):
+                cap = (program.SMOOTH_CAP_POST_DELOAD if prev.deload
+                       else program.SMOOTH_CAP)
+                self.assertLessEqual(program.planned_hours(w),
+                                     program.planned_hours(prev) * cap + 0.15)
+            prev = w
+
+    def test_b2b_growth_capped(self):
+        # [E9] le rôle b2b suit le même plafond de progression phase-dépendant
+        # que la sortie longue continue (adapt.long_growth), plus jamais illimité.
+        prev = None
+        for w in program.PROGRAM:
+            if (prev is not None and not w.deload
+                    and "b2b" in w.sessions and "b2b" in prev.sessions):
+                cap = workouts.minutes(prev.sessions["b2b"]) * adapt.long_growth(w.phase)
+                self.assertLessEqual(workouts.minutes(w.sessions["b2b"]), cap + 2.5)
+            prev = w
+
+    def test_backyard_weeks_not_rescaled_by_smoothing(self):
+        # Régression [E1] : une semaine de simu backyard garde le nombre de
+        # boucles du template (x VOLUME_SCALE arrondi), jamais rabotée par le
+        # lissage du volume hebdo total.
+        for idx, row in enumerate(program._ACTIVE_ROWS, start=1):
+            w = program.week(idx)
+            if program._has_backyard(w):
+                expected = adapt._scaled_spec(
+                    program._base_row_sessions(row)["long"], program.VOLUME_SCALE)
+                self.assertEqual(w.sessions["long"].params["loops"],
+                                 expected.params["loops"])
+
+    def test_long_growth_specifique_pic_tightened(self):
+        # [E8] resserré de 1.60 à 1.30 -- 3-6x la norme sûre sur la séance
+        # continue la plus traumatisante du plan.
+        self.assertEqual(adapt.long_growth("Spécifique"), 1.30)
+        self.assertEqual(adapt.long_growth("Pic"), 1.30)
+
+
 class TestOnboard(unittest.TestCase):
     def test_write_profile_sets_onboarded_and_preserves(self):
         import json
