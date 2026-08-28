@@ -282,6 +282,60 @@ def recent_completed_weeks(acts: List[Activity], today: Optional[date] = None,
     return out
 
 
+def history_json(activities: List[Activity], start: date, end: date) -> dict:
+    """Agrège l'historique Strava (course + cross-training, tous types) sur
+    [start, end) pour l'onglet Historique du dashboard web : calendrier
+    quotidien (heatmap), volume/dénivelé/FC hebdomadaires. `start` doit être
+    un lundi pour que la grille hebdo s'aligne proprement (comme le
+    calendrier de contributions GitHub)."""
+    acts = in_range(activities, start, end)
+
+    by_day: dict = {}
+    for a in acts:
+        b = by_day.setdefault(a.date, {"hours": 0.0, "km": 0.0})
+        b["hours"] += a.moving_time_s / 3600.0
+        b["km"] += a.distance_m / 1000.0
+
+    daily = []
+    d = start
+    while d < end:
+        v = by_day.get(d.isoformat(), {"hours": 0.0, "km": 0.0})
+        daily.append({"date": d.isoformat(), "hours": round(v["hours"], 2),
+                      "km": round(v["km"], 1)})
+        d += timedelta(days=1)
+
+    n_weeks = -(-(end - start).days // 7)  # division entière arrondie au sup.
+    weekly = []
+    cumulative_elev = 0.0
+    for i in range(n_weeks):
+        wk_start = start + timedelta(days=7 * i)
+        wk_end = min(wk_start + timedelta(days=7), end)
+        wk_acts = in_range(acts, wk_start, wk_end)
+        hours = sum(a.moving_time_s for a in wk_acts) / 3600.0
+        km = sum(a.distance_m for a in wk_acts) / 1000.0
+        elev = sum(a.elevation_m for a in wk_acts)
+        cumulative_elev += elev
+        hr_vals = [a.avg_hr for a in wk_acts if a.avg_hr]
+        weekly.append({
+            "week_start": wk_start.isoformat(),
+            "hours": round(hours, 2),
+            "km": round(km, 1),
+            "elevation_m": round(elev, 0),
+            "elevation_cumulative_m": round(cumulative_elev, 0),
+            "avg_hr": round(sum(hr_vals) / len(hr_vals), 1) if hr_vals else None,
+            "activities": len(wk_acts),
+        })
+
+    totals = {
+        "hours": round(sum(a.moving_time_s for a in acts) / 3600.0, 1),
+        "km": round(sum(a.distance_m for a in acts) / 1000.0, 1),
+        "elevation_m": round(cumulative_elev, 0),
+        "activities": len(acts),
+    }
+    return {"start": start.isoformat(), "end": end.isoformat(),
+            "daily": daily, "weekly": weekly, "totals": totals}
+
+
 def completed_week_summary(acts: List[Activity], planned_time_s: int,
                            today: Optional[date] = None) -> WeekSummary:
     """Résumé de la semaine qui VIENT DE SE TERMINER, relative au lundi à venir.

@@ -87,6 +87,56 @@ class TestWeeklyActuals(unittest.TestCase):
         self.assertIsNone(b[-1])
 
 
+class TestHistoryJson(unittest.TestCase):
+    def _act(self, d, secs, dist_m=0, elev_m=0.0, sport="Run", hr=None):
+        return Activity(date=d, moving_time_s=secs, distance_m=dist_m,
+                        elevation_m=elev_m, sport=sport, avg_hr=hr)
+
+    def test_daily_covers_every_day_including_zeros(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 14)  # lundi -> lundi, 7 jours
+        h = strava.history_json([self._act("2026-09-08", 3600, 10000)], start, end)
+        self.assertEqual(len(h["daily"]), 7)
+        self.assertEqual(h["daily"][0]["date"], "2026-09-07")
+        self.assertEqual(h["daily"][1]["hours"], 1.0)   # 2026-09-08
+        self.assertEqual(h["daily"][0]["hours"], 0.0)   # jour sans activité
+
+    def test_weekly_buckets_and_cumulative_elevation(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 21)  # 2 semaines pleines
+        acts = [self._act("2026-09-08", 3600, 10000, elev_m=100),
+                self._act("2026-09-15", 3600, 10000, elev_m=200)]
+        h = strava.history_json(acts, start, end)
+        self.assertEqual(len(h["weekly"]), 2)
+        self.assertEqual(h["weekly"][0]["elevation_cumulative_m"], 100)
+        self.assertEqual(h["weekly"][1]["elevation_cumulative_m"], 300)  # cumul, pas juste S2
+
+    def test_avg_hr_none_when_no_hr_data_that_week(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 14)
+        h = strava.history_json([self._act("2026-09-08", 3600, 10000, hr=None)], start, end)
+        self.assertIsNone(h["weekly"][0]["avg_hr"])
+
+    def test_avg_hr_averages_across_activities_with_hr(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 14)
+        acts = [self._act("2026-09-08", 3600, hr=140), self._act("2026-09-09", 3600, hr=150)]
+        h = strava.history_json(acts, start, end)
+        self.assertAlmostEqual(h["weekly"][0]["avg_hr"], 145.0)
+
+    def test_totals_match_sum_of_activities(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 14)
+        acts = [self._act("2026-09-08", 3600, 10000, elev_m=50),
+                self._act("2026-09-09", 1800, 5000, elev_m=25, sport="GravelRide")]
+        h = strava.history_json(acts, start, end)
+        self.assertAlmostEqual(h["totals"]["hours"], 1.5)
+        self.assertAlmostEqual(h["totals"]["km"], 15.0)
+        self.assertEqual(h["totals"]["elevation_m"], 75)
+        self.assertEqual(h["totals"]["activities"], 2)
+
+    def test_activities_outside_range_excluded(self):
+        start, end = date(2026, 9, 7), date(2026, 9, 14)
+        acts = [self._act("2026-09-06", 3600, 10000), self._act("2026-09-14", 3600, 10000)]
+        h = strava.history_json(acts, start, end)  # [start, end) : les deux hors bornes
+        self.assertEqual(h["totals"]["activities"], 0)
+
+
 class TestDashboard(unittest.TestCase):
     def test_builds_html(self):
         res = adapt.adapt_week(program.week(9),

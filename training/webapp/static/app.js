@@ -251,6 +251,7 @@ function wireTabs() {
   const tabs = [
     { tab: "tab-week", view: "view-week" },
     { tab: "tab-plan", view: "view-plan" },
+    { tab: "tab-history", view: "view-history" },
     { tab: "tab-chat", view: "view-chat" },
   ].map((t) => ({ tabEl: document.getElementById(t.tab), viewEl: document.getElementById(t.view) }));
   tabs.forEach(({ tabEl, viewEl }) => {
@@ -259,6 +260,7 @@ function wireTabs() {
         o.tabEl.classList.toggle("active", o.tabEl === tabEl);
         o.viewEl.style.display = o.tabEl === tabEl ? "" : "none";
       });
+      if (tabEl.id === "tab-history") historyOnTabShown();
     });
   });
 }

@@ -242,6 +242,17 @@ python3 training/generate.py serve             # http://127.0.0.1:5000
 N'a aucun effet sur la Routine hebdo (cron/Tâche planifiée) : deux surfaces
 indépendantes sur le même moteur.
 
+### Historique (onglet « Historique »)
+
+Vue des 12 derniers mois d'activités Strava (course **et** cross-training) :
+KPIs (volume, distance, dénivelé, nb d'activités), volume hebdomadaire en
+barres, calendrier de régularité façon « contributions GitHub », dénivelé
+cumulé et fréquence cardiaque moyenne dans le temps. Bascule « Voir en
+tableau » pour le détail hebdomadaire brut. Nécessite Strava configuré
+(`STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET`/`STRAVA_REFRESH_TOKEN` — voir
+`python3 generate.py strava-auth-url`) ; un seul appel Strava par lancement
+du serveur (mis en cache), le bouton « Actualiser » force un nouvel appel.
+
 ### Chat (onglet « Coach »)
 
 Pas de clé API Anthropic séparée, pas de facturation à part : le backend

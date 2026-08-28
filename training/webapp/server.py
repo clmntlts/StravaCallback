@@ -36,6 +36,12 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # pas 4 appels Strava. Vidé après un rechargement de profil (onboarding).
 _week_cache: dict = {}
 
+# Cache pour l'onglet Historique : {} tant que jamais chargé, sinon
+# {"data": dict}. Une seule fenêtre glissante (12 mois), pas par clé comme
+# _week_cache — vidé uniquement par le bouton "Actualiser" côté client
+# (?refresh=1), jamais automatiquement (évite un appel Strava par tab-switch).
+_history_cache: dict = {}
+
 
 def _reload_engine() -> None:
     """Recharge la chaîne config → workouts → coach → program après une
@@ -53,17 +59,19 @@ def _reload_engine() -> None:
     _week_cache.clear()
 
 
-def _load_live_activities():
+def _load_live_activities(days_back: int = None):
     """Best-effort : (activités, erreur). N'appelle jamais SystemExit (une
     route Flask ne doit jamais laisser fuiter une BaseException) — un échec
-    Strava dégrade en `acts=None` (plan macro sans réalisé), pas en 500."""
+    Strava dégrade en `acts=None` (plan macro sans réalisé), pas en 500.
+    `days_back` par défaut : assez pour couvrir tout le plan (ACWR compris)."""
     try:
         token = strava.refresh_access_token()
     except Exception as e:
         return None, f"Strava non configuré ou jeton invalide : {e}"
     try:
         now = datetime.now(timezone.utc)
-        span_start = now - timedelta(days=7 * program.N_WEEKS + 7)
+        span = days_back if days_back is not None else 7 * program.N_WEEKS + 7
+        span_start = now - timedelta(days=span)
         return strava.fetch_activities(token, span_start, now), None
     except Exception as e:
         return None, f"Échec de récupération Strava : {e}"
@@ -113,6 +121,24 @@ def create_app() -> "Flask":
         data["actuals"] = actuals
         data["strava_error"] = strava_error
         return jsonify(data)
+
+    @app.get("/api/history")
+    def api_history():
+        """Fenêtre glissante de 12 mois (alignée sur un lundi pour la grille
+        heatmap), mise en cache process-local — un appel Strava par process
+        tant que `?refresh=1` n'est pas demandé, pas un par tab-switch."""
+        if request.args.get("refresh") == "1":
+            _history_cache.clear()
+        if "data" not in _history_cache:
+            today = date.today()
+            end = today + timedelta(days=1)
+            raw_start = today - timedelta(days=365)
+            start = raw_start - timedelta(days=raw_start.weekday())
+            acts, strava_error = _load_live_activities(days_back=(end - start).days)
+            if acts is None:
+                return jsonify({"error": strava_error})
+            _history_cache["data"] = strava.history_json(acts, start, end)
+        return jsonify(_history_cache["data"])
 
     @app.get("/api/week/<int:idx>/fit/<role>")
     def api_week_fit(idx, role):

@@ -163,6 +163,47 @@ class TestPushGarminRoute(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
+class TestHistoryRoute(unittest.TestCase):
+    """`_load_live_activities` monkeypatché : jamais de vrai appel Strava ici."""
+
+    def setUp(self):
+        from webapp import server
+        server._week_cache.clear()
+        server._history_cache.clear()
+        self.server = server
+        self.client = server.create_app().test_client()
+
+    @patch("webapp.server._load_live_activities")
+    def test_returns_history_shape_and_caches_across_requests(self, mock_load):
+        from engine.models import Activity
+        mock_load.return_value = ([Activity("2026-09-08", 3600, 10000)], None)
+        r1 = self.client.get("/api/history")
+        self.assertEqual(r1.status_code, 200)
+        data = r1.get_json()
+        self.assertIn("weekly", data)
+        self.assertIn("daily", data)
+        self.assertIn("totals", data)
+
+        r2 = self.client.get("/api/history")
+        self.assertEqual(r2.status_code, 200)
+        mock_load.assert_called_once()  # 2e requête servie depuis le cache
+
+    @patch("webapp.server._load_live_activities")
+    def test_refresh_param_bypasses_cache(self, mock_load):
+        mock_load.return_value = ([], None)
+        self.client.get("/api/history")
+        self.client.get("/api/history?refresh=1")
+        self.assertEqual(mock_load.call_count, 2)
+
+    @patch("webapp.server._load_live_activities")
+    def test_strava_error_surfaces_without_500(self, mock_load):
+        mock_load.return_value = (None, "Strava non configuré ou jeton invalide : boom")
+        r = self.client.get("/api/history")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("boom", r.get_json()["error"])
+
+
+@unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
 class TestChatAssembleSystemPrompt(unittest.TestCase):
     def test_includes_all_three_contexts(self):
         from webapp import chat
