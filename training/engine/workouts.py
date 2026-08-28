@@ -33,7 +33,10 @@ PACES = {
     "recovery": "6:45",
     "easy": "6:15",
     "long": "6:40",
-    "yard": "6:30",
+    # Allure de boucle backyard : volontairement LENTE. En course "à l'heure
+    # pile", courir la boucle vite ne fait que raccourcir le repos et cramer les
+    # jambes ; on vise ~50' de boucle (repos ~10') tenable 24 h, pas un tempo.
+    "yard": "7:30",
     "steady": "5:35",
     "tempo": "5:00",
     "cruise": "4:55",
@@ -57,9 +60,9 @@ _PACE_OFFSETS = {
     "cruise": -12,    # ~5-10 km : un cran plus vif que le seuil
     "tempo": 0,       # seuil
     "steady": +25,    # tempo soutenu / allure spécifique
-    "yard": +75,      # allure de boucle backyard (facile-soutenu)
     "easy": +80,      # endurance fondamentale
     "long": +90,      # sortie longue (conservateur)
+    "yard": +105,     # boucle backyard : plus lent que la longue (tenable 24 h)
     "recovery": +110,  # récupération
 }
 
@@ -87,6 +90,31 @@ def _mm_s(pace_seconds: int) -> int:
 def speed_range(pace_key: str, slower: int = 20, faster: int = 20):
     base = _pace_seconds(PACES[pace_key])
     return _mm_s(base + slower), _mm_s(base - faster)
+
+
+# --------------------------------------------------------------------------- #
+# Cibles de fréquence cardiaque (Z2 aérobie). Convention FIT : une cible FC en
+# bpm s'encode `bpm + 100` dans custom_target_heart_rate_low/high (≤100 = %FCmax).
+# --------------------------------------------------------------------------- #
+_HR_OFFSET = 100
+
+
+def hr_range(band: str = "z2"):
+    """Bornes FC (bpm) pour une séance aérobie, ou None si la zone n'est pas
+    calibrée dans le profil. `band` : "z2" (cœur d'endurance) ou "recovery"
+    (sous la Z2, récup franche)."""
+    z = config.HR_ZONE2
+    if not z:
+        return None
+    lo, hi = int(z["min"]), int(z["max"])
+    if band == "recovery":
+        return (max(60, lo - 30), lo)   # plafonné au bas de la Z2
+    return (lo, hi)
+
+
+def _hr_target(band: str):
+    r = hr_range(band)
+    return None if r is None else (r[0] + _HR_OFFSET, r[1] + _HR_OFFSET)
 
 
 def MIN(m: float) -> int:
@@ -125,6 +153,18 @@ class Builder:
         lo, hi = speed_range(pace, slower, faster)
         self.w.add(Step(name, Duration.TIME, MIN(minutes),
                         Target.SPEED, 0, lo, hi, intensity))
+        return self
+
+    def aerobic(self, minutes, pace, name, band="z2", slower=30, faster=15,
+                intensity=Intensity.ACTIVE):
+        """Bloc d'endurance : cadré en FRÉQUENCE CARDIAQUE (Z2) si le profil a
+        une zone calibrée — c'est le garde-fou anti-dérive Z3 sur les faciles/
+        longues. Sinon, retombe sur une cible d'allure."""
+        hr = _hr_target(band)
+        if hr is None:
+            return self.run_time(minutes, pace, name, slower, faster, intensity)
+        self.w.add(Step(name, Duration.TIME, MIN(minutes),
+                        Target.HEART_RATE, 0, hr[0], hr[1], intensity))
         return self
 
     def run_dist(self, km, pace, name, slower=15, faster=15,
@@ -190,20 +230,20 @@ class Template:
 def _easy(p):
     m = p["minutes"]
     return (Builder(f"Facile {m:.0f}'")
-            .run_time(m, "easy", "Endurance", 30, 15).build())
+            .aerobic(m, "easy", "Endurance Z2", "z2", 30, 15).build())
 
 
 def _recovery(p):
     m = p["minutes"]
     return (Builder(f"Recup {m:.0f}'")
-            .run_time(m, "recovery", "Tres facile", 45, 0).build())
+            .aerobic(m, "recovery", "Tres facile", "recovery", 45, 0).build())
 
 
 def _strides(p):
     m = p["minutes"]
     reps = int(p.get("reps", 6))
     return (Builder(f"Facile {m:.0f}' + {reps} lignes droites")
-            .run_time(m, "easy", "Endurance", 30, 15)
+            .aerobic(m, "easy", "Endurance Z2", "z2", 30, 15)
             .repeat(reps, lambda b: (
                 b.effort_time(20, "Ligne droite vite"),
                 b.easy_time(1, "Recup trot", Intensity.RECOVERY)))
@@ -214,19 +254,19 @@ def _strides(p):
 def _long(p):
     m = p["minutes"]
     return (Builder(f"Sortie longue {_hm(m)}")
-            .run_time(m, "long", "Effort ultra", 30, 20).build())
+            .aerobic(m, "long", "Effort ultra Z2", "z2", 30, 20).build())
 
 
 def _b2b(p):
     m = p["minutes"]
     return (Builder(f"B2B J2 - {_hm(m)}")
-            .run_time(m, "long", "Jambes fatiguees - facile", 40, 15).build())
+            .aerobic(m, "long", "Jambes fatiguees - Z2", "z2", 40, 15).build())
 
 
 def _night(p):
     m = p["minutes"]
     return (Builder(f"Sortie nuit {_hm(m)} - frontale + ravito")
-            .run_time(m, "long", "Nuit - facile", 40, 20).build())
+            .aerobic(m, "long", "Nuit - facile Z2", "z2", 40, 20).build())
 
 
 def _threshold(p):
@@ -282,7 +322,7 @@ def _runwalk(p):
     cycles = max(1, round(hours * 60 / (run_min + walk_min)))
     return (Builder(f"Marche-course {_hm(hours*60)}")
             .repeat(cycles, lambda b: (
-                b.run_time(run_min, "long", "Course", 40, 20),
+                b.aerobic(run_min, "long", "Course Z2", "z2", 40, 20),
                 b.easy_time(walk_min, "Marche + ravito", Intensity.REST)))
             .build())
 
@@ -351,6 +391,40 @@ TEMPLATES: Dict[str, Template] = {
                           lambda p: f"Simu Backyard {int(p['loops'])} boucles",
                           lambda p: p["loops"] * 60.0),  # 1 boucle "à l'heure pile" ≈ 60'
 }
+
+
+# --------------------------------------------------------------------------- #
+# Consignes spécifiques ULTRA par type de séance (ravito chiffré, durabilité,
+# discipline d'allure/FC). Déterministe : toujours présent dans le rapport, le
+# jugement humain peut l'enrichir au runtime.
+# --------------------------------------------------------------------------- #
+_TIPS = {
+    "long":      "Ravito dès 45' : 40-60 g de glucides/h + boire régulièrement. "
+                 "Teste tes aliments de course. Marche franchement les côtes.",
+    "b2b":       "Jour 2 sur jambes fatiguées : pars très lent, c'est le but. "
+                 "Recharge glucides + protéines juste après la séance de la veille.",
+    "night":     "Frontale + batterie de secours. Mange comme en course (le froid "
+                 "nocturne creuse les besoins) ; répète la routine de nuit de la course.",
+    "runwalk":   "Rythme marche-course = celui de la course. Ravito à CHAQUE bloc "
+                 "marche : vise 50-70 g de glucides/h, entraîne l'estomac.",
+    "backyard":  "Rituel de boucle : cours ~50', puis mange/bois PENDANT le repos. "
+                 "60-80 g de glucides/h. Même corral, même minute : répète le protocole.",
+    "hills":     "Descentes CONTRÔLÉES (l'excentrique bâtit la durabilité des quadris). "
+                 "Ajoute gainage + mollets 2×/sem hors course : 1er rempart anti-blessure.",
+    "resist":    "Blocs soutenus mais pas au taquet ; c'est la résistance à la fatigue "
+                 "qu'on travaille. Renfo excentrique en complément.",
+    "threshold": "Seuil = « confortablement dur », pas une course. Récup vraiment facile "
+                 "entre les reps.",
+    "cruise":    "Seuil par la distance : régularité sur chaque rep, récup en trot.",
+    "easy":      "Bride la FC en Z2. Si l'allure file, RALENTIS : l'endurance se bâtit lent.",
+    "recovery":  "Vraie récup : très lent, FC basse. Aucun ego, on régénère.",
+    "strides":   "Faciles en Z2 ; les lignes droites restent relâchées et rapides (pas un sprint).",
+}
+
+
+def tip(spec: SessionSpec) -> str:
+    """Consigne spécifique ultra pour ce type de séance (chaîne vide si aucune)."""
+    return _TIPS.get(spec.template, "")
 
 
 def build_workout(spec: SessionSpec) -> Workout:

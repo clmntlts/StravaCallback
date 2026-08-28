@@ -29,8 +29,10 @@ Variables d'environnement :
     GARMIN_EMAIL          identifiant du compte Garmin Connect
     GARMIN_PASSWORD       mot de passe du compte
     GARMIN_TOKENS_BASE64  (option, RECOMMANDÉ pour l'automatique cloud) jeton de
-                          session encodé base64 — évite de se relogger à chaque
-                          run (Garmin limite les logins répétés) et fonctionne
+                          session encodé base64 (base64 du JSON de session
+                          `garminconnect` : di_token / di_refresh_token) — évite
+                          de se relogger à chaque run (Garmin limite les logins
+                          répétés, voire bloque l'IP datacenter) et fonctionne
                           dans un environnement éphémère (pas de dossier persistant).
                           L'obtenir une fois : `generate.py garmin-connect-token`.
     GARMIN_TOKENSTORE     (option) dossier des jetons (défaut ~/.garminconnect),
@@ -39,6 +41,8 @@ Variables d'environnement :
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -68,9 +72,14 @@ _END_DISTANCE = {"conditionTypeId": 3, "conditionTypeKey": "distance"}
 _END_LAP = {"conditionTypeId": 1, "conditionTypeKey": "lap.button"}
 _END_ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations"}
 
-# targetType : cible (allure = pace.zone, bornes en m/s ; sinon pas de cible)
+# targetType : cible (allure = pace.zone, bornes en m/s ; FC = heart.rate.zone,
+# bornes en bpm réels ; sinon pas de cible)
 _TARGET_PACE = {"workoutTargetTypeId": 6, "workoutTargetTypeKey": "pace.zone"}
+_TARGET_HR = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone"}
 _TARGET_NONE = {"workoutTargetTypeId": 1, "workoutTargetTypeKey": "no.target"}
+
+# Convention FIT (voir workouts.py) : une cible FC est stockée en bpm + 100.
+_HR_OFFSET = 100
 
 
 # --------------------------------------------------------------------------- #
@@ -99,8 +108,16 @@ def _leaf(step) -> Dict:
         # bornes en m/s ; low = plus lent (vitesse faible), high = plus rapide.
         node["targetValueOne"] = round(step.custom_low / 1000, 3)          # mm/s -> m/s
         node["targetValueTwo"] = round(step.custom_high / 1000, 3)
-    else:
+    elif (step.target_type == Target.HEART_RATE
+            and step.custom_low is not None and step.custom_high is not None):
+        node["targetType"] = _TARGET_HR
+        node["targetValueOne"] = step.custom_low - _HR_OFFSET    # bpm+100 -> bpm réel
+        node["targetValueTwo"] = step.custom_high - _HR_OFFSET
+    elif step.target_type == Target.OPEN:
         node["targetType"] = _TARGET_NONE
+    else:
+        raise ValueError(
+            f"Target Garmin Connect non géré : {step.target_type!r} (step={step.name!r})")
     return node
 
 
@@ -182,26 +199,48 @@ def _import_garmin():
     return Garmin
 
 
+def _token_json_from_env(raw: str) -> str:
+    """Normalise la valeur de `GARMIN_TOKENS_BASE64` en JSON de session.
+
+    Format attendu : base64 du JSON produit par `dump_token_base64`. On tolère
+    aussi un JSON collé tel quel (au cas où la variable aurait été renseignée
+    sans l'encodage).
+    """
+    s = raw.strip()
+    if s.startswith("{"):
+        return s
+    try:
+        return base64.b64decode(s).decode("utf-8")
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return s
+
+
 def login():
     """Ouvre une session Garmin Connect.
 
     Ordre de préférence (du plus robuste au plus interactif) :
       1. `GARMIN_TOKENS_BASE64` : restaure une session déjà authentifiée SANS
-         mot de passe ni MFA — idéal pour l'automatique en environnement éphémère.
+         mot de passe ni MFA — idéal pour l'automatique en environnement éphémère
+         (et pour contourner le blocage/rate-limit des IP datacenter au login).
       2. e-mail + mot de passe (+ dossier de jetons persistant si dispo) : login
          complet ; nécessite de franchir la MFA au 1er login si elle est active.
 
-    Import paresseux de `garminconnect` (le reste du moteur n'en dépend pas).
+    API `garminconnect` 0.3.x : la sérialisation de session est portée par le
+    client interne (`client.client.dumps/loads`) ; la restauration passe par
+    `Garmin.login(tokenstore=<jeton>)`, qui charge le jeton, rafraîchit le
+    di_token si besoin et valide la session (récupère le profil). Import
+    paresseux de `garminconnect` (le reste du moteur n'en dépend pas).
     """
     Garmin = _import_garmin()
 
     # 1) Jeton de session en variable d'environnement (sans mot de passe).
-    token_b64 = os.environ.get("GARMIN_TOKENS_BASE64")
-    if token_b64:
+    token_env = os.environ.get("GARMIN_TOKENS_BASE64")
+    if token_env:
         client = Garmin()
         try:
-            client.garth.loads(token_b64)      # restaure la session depuis le jeton
-            client.get_full_name()             # vérifie que le jeton est valide
+            # >512 chars => garminconnect traite la chaîne comme un jeton inline
+            # (et non comme un chemin) : loads() + refresh + validation profil.
+            client.login(tokenstore=_token_json_from_env(token_env))
             return client
         except Exception as e:
             if not (os.environ.get("GARMIN_EMAIL") and os.environ.get("GARMIN_PASSWORD")):
@@ -225,13 +264,25 @@ def login():
 
 
 def dump_token_base64(client) -> str:
-    """Sérialise la session courante en base64 (à stocker dans GARMIN_TOKENS_BASE64)."""
-    return client.garth.dumps()
+    """Sérialise la session courante en base64 (à stocker dans GARMIN_TOKENS_BASE64).
+
+    `garminconnect` 0.3.x sérialise en JSON via le client interne
+    (`client.client.dumps()`) ; on l'encode en base64 pour en faire un jeton
+    d'une seule ligne, sûr à poser en variable d'environnement.
+    """
+    raw_json = client.client.dumps()        # JSON : di_token / di_refresh_token / di_client_id
+    return base64.b64encode(raw_json.encode("utf-8")).decode("ascii")
 
 
 def upload_workout(client, payload: Dict) -> str:
-    """Crée la séance dans Garmin Connect ; renvoie son id."""
-    resp = client.connectapi("/workout-service/workout", method="POST", json=payload)
+    """Crée la séance dans Garmin Connect ; renvoie son id.
+
+    `garminconnect` 0.3.x a figé `Garmin.connectapi()`/`client.connectapi()` sur
+    GET (passer `method="POST"` en kwarg lève désormais "got multiple values
+    for argument 'method'") : le POST passe par le client interne `client.client`.
+    """
+    resp = client.client.post("connectapi", "/workout-service/workout",
+                              json=payload, api=True)
     wid = (resp or {}).get("workoutId") or (resp or {}).get("workoutKey") \
         or (resp or {}).get("id")
     if wid is None:
@@ -245,8 +296,8 @@ def schedule_workout(client, workout_id: str, date_iso: str) -> Dict:
     C'est cette planification qui la fait apparaître comme *séance du jour* sur
     la montre après synchronisation.
     """
-    return client.connectapi(f"/workout-service/schedule/{workout_id}",
-                             method="POST", json={"date": date_iso})
+    return client.client.post("connectapi", f"/workout-service/schedule/{workout_id}",
+                              json={"date": date_iso}, api=True)
 
 
 def push_and_schedule(payload: Dict, date_iso: str, client=None) -> Tuple[str, object]:

@@ -61,18 +61,23 @@ en un ou deux tours groupés — ne noie pas l'utilisateur). Couvre bien le beso
 du coureur :
   1. Objectif visé (ex. 12 / 18 / 24 yards, ou « dernier debout »).
   2. Date de la course (YYYY-MM-DD).
-  3. Jours de course par semaine (3 ou 4).
-  4. Volume de course hebdo ACTUEL (heures/sem).
-  5. Plus longue sortie course récente (minutes) — cadre la montée en charge.
-  6. Cross-training (vélo, etc.) : peu / modéré / beaucoup
+  3. Date de début souhaitée du plan (lundi de la semaine 1). Par défaut,
+     sans réponse explicite, elle est auto-calculée en remontant depuis la
+     date de course sur la durée du template — ce qui peut tomber dans le
+     passé si l'onboarding a lieu tard. Demande-la explicitement et calcule
+     le prochain lundi si besoin (--plan-start).
+  4. Jours de course par semaine (3 ou 4).
+  5. Volume de course hebdo ACTUEL (heures/sem).
+  6. Plus longue sortie course récente (minutes) — cadre la montée en charge.
+  7. Cross-training (vélo, etc.) : peu / modéré / beaucoup
      → poids charge aérobie 0.3 / 0.5 / 0.7 (--cross-weight).
-  7. Perf récente de référence pour caler les allures (distance + temps,
+  8. Perf récente de référence pour caler les allures (distance + temps,
      ex. 10k en 44:00) — optionnel mais recommandé.
 Puis ÉCRIS ses réponses (ne lui demande pas d'éditer un fichier) :
    python3 training/generate.py onboard --objective "<obj>" --race-date <YYYY-MM-DD> \
-     --days <N> --start-volume <H> --longest-run <MIN> --cross-weight <0-1> \
-     --ref-distance <ex. 10k> --ref-time <ex. 44:00>
-   (options aussi : --plan-start, --plan-weeks, --peak-volume)
+     --plan-start <YYYY-MM-DD lundi> --days <N> --start-volume <H> --longest-run <MIN> \
+     --cross-weight <0-1> --ref-distance <ex. 10k> --ref-time <ex. 44:00>
+   (options aussi : --plan-weeks, --peak-volume)
 Enfin, confirme le plan dérivé : python3 training/generate.py config
 NE PAS lancer l'onboarding dans un run automatique/planifié (aucun humain) :
 dans ce cas, exécute la tâche demandée et ignore ce bloc.

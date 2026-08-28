@@ -1,10 +1,156 @@
-# Runbook — automatisation hebdomadaire (Claude = le moteur)
+# Runbook — automatisation hebdomadaire
 
-Chaque **dimanche ~18h (Europe/Paris)**, une Routine réveille une session Claude
-fraîche qui exécute ce flux. Claude n'est pas un simple lanceur de script : il est
-**le coach**. Le code garantit le déterministe (récup Strava, encodage FIT, envoi) ;
-Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de conduite
-(`engine/program.py`) et des garde-fous (`engine/adapt.py`).
+Deux façons d'exécuter le run hebdo, selon le besoin :
+
+- **🖥️ Local (recommandé pour le pipeline complet, Garmin inclus)** — un simple
+  `cron` sur **ta machine** (IP résidentielle) lance `run_weekly.sh`. C'est le
+  seul chemin où la **planification Garmin Connect fonctionne de façon fiable** :
+  depuis une IP datacenter (cloud), Garmin bloque le login (429/403) et le
+  rafraîchissement des jetons échoue. Voir **« Exécution locale »** ci-dessous.
+- **☁️ Routine cloud (Claude = le coach)** — chaque dimanche, une Routine réveille
+  une session Claude fraîche qui exécute le flux et **apporte le jugement** de
+  coach. Idéal pour l'email + les `.FIT`, mais **la planification Garmin n'y est
+  pas fiable** (voir issue #14). Détaillé dans **« Flux de la Routine »**.
+
+Dans les deux cas, le code garantit le déterministe (récup Strava, encodage FIT,
+envoi) ; la ligne de conduite (`engine/program.py`) et les garde-fous
+(`engine/adapt.py`) bornent l'adaptation.
+
+## Exécution locale (recommandé) — cron sur ta machine
+
+Sur une machine à toi, tout se simplifie : le dossier de jetons Garnin
+`~/.garminconnect` **persiste** entre les runs, donc après **un** login tu n'y
+touches plus (pas de `GARMIN_TOKENS_BASE64`, pas de MFA à répéter), et le refresh
+des jetons (~1 an) fonctionne.
+
+> ⚠️ **IP résidentielle requise** pour la partie Garmin. Un VPS cloud a une IP
+> datacenter → il risque le même blocage Garmin qu'en Routine cloud. Préfère un
+> Raspberry Pi / NAS / mini-PC allumé chez toi (ou ton laptop s'il est allumé à
+> l'heure du cron).
+
+**Mise en place (une fois) :**
+
+```bash
+# 1) dépendance Garmin (optionnelle : seulement pour --push-connect)
+pip install "garminconnect>=0.3,<0.4"
+
+# 2) secrets locaux (jamais committés : training/.env est gitignoré)
+cp training/.env.example training/.env
+$EDITOR training/.env                       # renseigne Strava / Gmail / Garmin
+
+# 3) login Garmin Connect UNE fois (franchit la MFA, remplit ~/.garminconnect)
+python3 training/generate.py garmin-connect-login
+
+# 4) test à blanc (génère, n'envoie rien)
+./training/run_weekly.sh --dry-run
+```
+
+**Cron hebdomadaire** (dimanche 19h, heure locale de la machine) :
+
+```cron
+0 19 * * 0  /chemin/vers/StravaCallback/training/run_weekly.sh >> /chemin/vers/StravaCallback/training/logs/cron.out 2>&1
+```
+
+`run_weekly.sh` charge `training/.env`, ajoute `--push-connect` automatiquement si
+des identifiants Garmin sont présents, exécute `generate.py send --live`, et
+journalise dans `training/logs/`. Les arguments passés au script sont transmis à
+`send` (`./training/run_weekly.sh --dry-run`, `./training/run_weekly.sh 12`).
+
+> **Deux variantes de routine locale :**
+> - `training/run_weekly.sh` → **déterministe pur** (pas de Claude). L'engine
+>   adapte via `adapt.py` et envoie. Simple, 100 % autonome.
+> - `run_claude_weekly.sh` (racine) → **Claude comme coach** (ci-dessous). Garde
+>   le jugement hebdo en plus du déterministe.
+
+### Variante : Claude comme coach, en local (headless)
+
+Pour **garder Claude dans la boucle** tout en profitant de l'IP résidentielle,
+on planifie le **CLI Claude Code local** (et non la Routine cloud du produit, qui
+tourne sur IP datacenter → Garmin bloqué). `run_claude_weekly.sh` lance Claude en
+mode headless sur la commande `/weekly` : il génère, **juge** la proposition
+(cohérence charge/fatigue, signaux particuliers), envoie l'email et planifie sur
+Garmin, puis dépose d'éventuelles suites en issues `pending-dev`.
+
+**Mise en place (une fois) :**
+
+```bash
+# Claude Code installé et authentifié sur la machine
+claude login                                  # (ou export ANTHROPIC_API_KEY=…)
+# secrets + login Garmin déjà faits (voir « Exécution locale » ci-dessus)
+./run_claude_weekly.sh                         # test manuel du run headless
+```
+
+**Cron hebdomadaire :**
+
+```cron
+0 19 * * 0  /chemin/vers/StravaCallback/run_claude_weekly.sh >> /chemin/vers/StravaCallback/training/logs/claude-cron.out 2>&1
+```
+
+> ⚠️ Le wrapper lance Claude avec `--dangerously-skip-permissions` (aucun prompt
+> en run non-surveillé) : à n'utiliser que sur **ta** machine de confiance.
+> Posture plus stricte via une allowlist : `export CLAUDE_PERM='--allowedTools Bash Read Edit'`
+> avant l'appel. Vérifie les drapeaux disponibles avec `claude --help`.
+
+> `run_claude_weekly.sh` (bash) est pour **macOS/Linux**. Sous **Windows**, utilise
+> `run_claude_weekly.ps1` (PowerShell) + le Planificateur de tâches — voir ci-dessous.
+
+### Windows 11 — Planificateur de tâches (rattrapage au réveil)
+
+Sous Windows, le wrapper est **`run_claude_weekly.ps1`** (racine) et le minuteur est
+le **Planificateur de tâches**. L'option clé **« Exécuter dès que possible après
+un démarrage planifié manqué »** (`StartWhenAvailable`) donne exactement le
+rattrapage voulu : si le PC était éteint/en veille à l'heure fixe, la tâche part
+**au prochain allumage**. Le wrapper contient en plus une **garde « une fois par
+semaine »** (fichier `training/logs/.last-week-run`) : même si le PC se réveille
+plusieurs fois, le run n'a lieu qu'une fois par semaine ISO.
+
+**Mise en place (une fois) :**
+
+```powershell
+# 1) Claude Code installé + authentifié, secrets + login Garmin faits
+claude login
+Copy-Item training\.env.example training\.env      # puis renseigne-le
+python training\generate.py garmin-connect-login    # login Garmin (MFA), tokenstore persistant
+
+# 2) test manuel du run headless
+.\run_claude_weekly.ps1 -Force
+
+# 3) enregistrer la tâche planifiée (dimanche 19h, rattrapage au réveil)
+$root   = "C:\chemin\vers\StravaCallback"           # adapte le chemin
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$root\run_claude_weekly.ps1`""
+$trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 7pm
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+            -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName 'StravaBackyard-Weekly' -Action $action `
+            -Trigger $trigger -Settings $settings `
+            -Description 'Run hebdo coach Backyard Ultra (Claude local)'
+```
+
+- `-StartWhenAvailable` → rattrape un créneau manqué (PC éteint) au prochain
+  démarrage. `-WakeToRun` → réveille depuis la **veille** (pas depuis l'arrêt
+  complet) pour tenir l'heure fixe quand c'est possible.
+- La tâche s'exécute sous **ton compte** ; coche « Exécuter même si l'utilisateur
+  n'est pas connecté » dans les propriétés de la tâche si tu veux qu'elle tourne
+  sans session ouverte (elle demandera ton mot de passe Windows).
+- Logs dans `training\logs\claude-weekly-*.log`. Relancer à la main :
+  `.\run_claude_weekly.ps1 -Force`.
+
+**Onboarding** (personnaliser `training/athlete.json`, la mémoire durable) : c'est
+un **one-shot**, indépendant de la routine. Fais-le une fois en interactif — ouvre
+une session Claude Code locale (elle te posera les questions via le hook de
+démarrage) ou lance directement :
+
+```bash
+python3 training/generate.py onboard --objective "18-24 yards" --race-date 2027-04-24 \
+  --days 4 --start-volume <H> --longest-run <MIN> --cross-weight 0.5 \
+  --ref-distance 10k --ref-time 44:00
+git add training/athlete.json && git commit -m "Onboarding athlète"
+```
+
+`athlete.json` est versionné : une fois rempli, **tous** les runs (locaux comme
+interactifs) le relisent depuis le repo. La routine hebdo, elle, ne refait jamais
+l'onboarding.
 
 ## Flux de la Routine
 
@@ -67,7 +213,7 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 | `GARMIN_SCOPE` | *(option)* scopes OAuth demandés |
 | `GARMIN_EMAIL` | *(push Connect non-officiel)* identifiant du compte Garmin Connect |
 | `GARMIN_PASSWORD` | *(push Connect non-officiel)* mot de passe du compte |
-| `GARMIN_TOKENS_BASE64` | *(auto cloud)* jeton de session base64 (via `garmin-connect-token`) — évite le re-login |
+| `GARMIN_TOKENS_BASE64` | *(cloud éphémère uniquement)* jeton de session base64 (via `garmin-connect-token`). **Inutile en local** (le tokenstore persiste). Peu fiable en cloud : le refresh du jeton échoue derrière le proxy — voir issue #14. |
 | `GARMIN_TOKENSTORE` | *(option)* dossier des jetons Connect (défaut `~/.garminconnect`) |
 
 - Jeton Strava : créer une app sur https://www.strava.com/settings/api, puis
@@ -78,6 +224,26 @@ Claude apporte le **jugement** hebdomadaire dans les limites de la ligne de cond
 
 Sans ces variables, `generate.py send --live` s'arrête avec un message explicite.
 Pour tester hors-ligne : `python3 generate.py send --activities tests/fixtures/last_week_sample.json --today 2026-09-14 --dry-run`.
+
+## Interface web locale (optionnelle)
+
+Dashboard interactif dans le navigateur, en plus (pas à la place) de l'email
+hebdo et de la CLI : vue du plan complet, vue semaine avec KPIs/ajustements,
+téléchargement `.fit` par séance en un clic, push Garmin. **Local uniquement**
+(`127.0.0.1`) — jamais hébergée publiquement, entre autres pour rester sur IP
+résidentielle côté Garmin (cf. push Garmin Connect ci-dessous, et issue #14).
+
+```bash
+pip install -r training/requirements-web.txt   # Flask, seule dépendance
+python3 training/generate.py serve             # http://127.0.0.1:5000
+# ou : python3 training/generate.py serve --port 5050
+```
+
+N'a aucun effet sur la Routine hebdo (cron/Tâche planifiée) : deux surfaces
+indépendantes sur le même moteur. Le chat (Q&A sur le plan, onboarding) prévu
+pour cette interface s'appuiera sur la CLI `claude` déjà installée en local
+(pas de clé API Anthropic séparée, pas de facturation à part — même mécanisme
+que la Routine hebdo qui invoque `claude -p "/weekly"`).
 
 ## Push Garmin (API officielle, Training API)
 
@@ -122,6 +288,12 @@ python3 generate.py send --live --push-connect    # upload + planification des 4
 ```
 
 ### Full-auto (Routine cloud, sans machine ni MFA) : jeton en variable
+
+> ⚠️ **Peu fiable en cloud.** Le rafraîchissement du jeton passe par un transport
+> (`curl_cffi`) coupé par le proxy sortant : un jeton frais tient le temps d'un
+> run, mais un jeton âgé (cas d'une Routine hebdo) déclenche un refresh qui
+> échoue. Pour une planification Garmin fiable, préfère l'**exécution locale**
+> ci-dessus. Détails et suivi : issue #14.
 
 L'environnement cloud est **éphémère** : le dossier de jetons (`~/.garminconnect`)
 est effacé entre les runs. Pour que la Routine se connecte **sans re-login**

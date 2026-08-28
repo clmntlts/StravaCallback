@@ -28,7 +28,11 @@ DURATION_DISTANCE = "DISTANCE"  # valeur en MÈTRES
 DURATION_OPEN = "OPEN"
 
 TARGET_SPEED = "SPEED"          # bornes en m/s
+TARGET_HEART_RATE = "HEART_RATE"  # bornes en bpm réels
 TARGET_OPEN = "OPEN"
+
+# Convention FIT (voir workouts.py) : une cible FC est stockée en bpm + 100.
+_HR_OFFSET = 100
 
 INTENSITY = {
     Intensity.ACTIVE: "ACTIVE",
@@ -60,8 +64,16 @@ def _leaf(step) -> Dict:
         node["targetType"] = TARGET_SPEED
         node["targetValueLow"] = round(step.custom_low / 1000, 3)      # mm/s -> m/s
         node["targetValueHigh"] = round(step.custom_high / 1000, 3)
-    else:
+    elif (step.target_type == Target.HEART_RATE
+            and step.custom_low is not None and step.custom_high is not None):
+        node["targetType"] = TARGET_HEART_RATE
+        node["targetValueLow"] = step.custom_low - _HR_OFFSET    # bpm+100 -> bpm réel
+        node["targetValueHigh"] = step.custom_high - _HR_OFFSET
+    elif step.target_type == Target.OPEN:
         node["targetType"] = TARGET_OPEN
+    else:
+        raise ValueError(
+            f"Target Training API non géré : {step.target_type!r} (step={step.name!r})")
     return node
 
 

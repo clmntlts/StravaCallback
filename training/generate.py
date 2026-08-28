@@ -22,22 +22,60 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+# La console Windows est souvent en cp1252 : forcer UTF-8 pour les glyphes des
+# résumés/rapports (→ ✓ ✗ ✉ 🏃), sinon UnicodeEncodeError coupe la commande.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
+
+def _load_dotenv(path):
+    """Charge un fichier .env (KEY=VALUE) dans os.environ SANS écraser l'existant.
+
+    Best-effort et sans dépendance : lignes vides et commentaires (#) ignorés,
+    y compris un commentaire en fin de ligne (` # ...`) sur une valeur non
+    quotée ; guillemets entourants retirés. Les vraies variables du shell
+    restent prioritaires (setdefault). But : que les commandes manuelles
+    (strava-auth-url, strava-auth-exchange, garmin-connect-login, send…)
+    marchent sans avoir à charger training/.env à la main dans le shell.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key, val = key.strip(), val.strip()
+                if val[:1] in ("\"", "'"):
+                    quote = val[0]
+                    end = val.find(quote, 1)
+                    val = val[1:end] if end != -1 else val[1:]
+                else:
+                    val = re.split(r"\s+#", val, maxsplit=1)[0].rstrip()
+                if key:
+                    os.environ.setdefault(key, val)
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv(os.path.join(HERE, ".env"))
+
 from engine import (adapt, coach, config, dashboard, deliver, garmin,            # noqa: E402
-                    garmin_connect, garmin_workout, program, report, strava,
-                    workouts)
+                    garmin_connect, program, push, report, strava, workouts)
 from engine.fit_encoder import write as write_fit                               # noqa: E402
 from engine.models import WeekSummary, ordered_roles                            # noqa: E402
 
 WORKOUTS_DIR = os.path.join(HERE, "workouts")
-
-# Décalage (jours) du rôle par rapport au lundi de la semaine (week_start)
-ROLE_OFFSET = {"quality": 1, "easy": 3, "long": 5, "b2b": 6}  # Mar/Jeu/Sam/Dim
 
 
 # --------------------------------------------------------------------------- #
@@ -132,28 +170,28 @@ def _resolve_week(args, today):
     return program.target_week_index(today)
 
 
+def _print_push_results(results, ok_fmt="  ✓ {date}  {label}  ({detail})",
+                        err_fmt="  ✗ {date}  {label} — {detail}"):
+    for r in results:
+        fmt = ok_fmt if r["ok"] else err_fmt
+        print(fmt.format(**r))
+
+
 def _push_garmin(res, idx):
-    """Crée + planifie chaque séance sur Garmin (si configuré). Repli sinon."""
-    if not garmin.is_configured():
+    """Crée + planifie chaque séance sur la Training API officielle (si
+    configurée). Repli sinon. Ne fait plus que l'affichage : la logique de
+    sélection/push vit dans engine/push.py (partagée avec la route web)."""
+    result = push.push_week(res, idx, via="training-api")
+    if not result["configured"]:
         print("\n[garmin] non configuré (GARMIN_CONSUMER_KEY/SECRET/REFRESH_TOKEN) "
               "— push ignoré, email/FIT conservés.")
         return
-    try:
-        token = garmin.get_access_token()
-    except Exception as e:
-        print(f"\n[garmin] échec d'authentification : {e}\n"
+    if result["detail"] is not None:
+        print(f"\n[garmin] échec d'authentification : {result['detail']}\n"
               "         push ignoré, email/FIT conservés.")
         return
     print("\n[garmin] planification des séances :")
-    for role in ordered_roles(res.week.sessions):
-        spec = res.week.sessions[role]
-        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
-        try:
-            wid = garmin.push_and_schedule(garmin_workout.session_to_garmin(spec), d,
-                                           access_token=token)
-            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
-        except Exception as e:
-            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+    _print_push_results(result["results"])
 
 
 def _push_garmin_connect(res, idx):
@@ -161,27 +199,20 @@ def _push_garmin_connect(res, idx):
 
     C'est la planification qui fait apparaître la séance comme *séance du jour*
     à date fixe sur la montre. Repli propre si non configuré / lib absente.
+    Ne fait plus que l'affichage : la logique de sélection/push vit dans
+    engine/push.py (partagée avec la route web).
     """
-    if not garmin_connect.is_configured():
+    result = push.push_week(res, idx, via="connect")
+    if not result["configured"]:
         print("\n[garmin-connect] non configuré (GARMIN_EMAIL / GARMIN_PASSWORD) "
               "— planification ignorée, email/FIT conservés.")
         return
-    try:
-        client = garmin_connect.login()
-    except Exception as e:
-        print(f"\n[garmin-connect] connexion impossible : {e}\n"
+    if result["detail"] is not None:
+        print(f"\n[garmin-connect] connexion impossible : {result['detail']}\n"
               "                 planification ignorée, email/FIT conservés.")
         return
     print("\n[garmin-connect] planification au calendrier :")
-    for role in ordered_roles(res.week.sessions):
-        spec = res.week.sessions[role]
-        d = (program.week_start(idx) + timedelta(days=ROLE_OFFSET[role])).isoformat()
-        try:
-            wid, client = garmin_connect.push_and_schedule(
-                garmin_connect.session_to_connect(spec), d, client=client)
-            print(f"  ✓ {d}  {workouts.label(spec)}  (id {wid})")
-        except Exception as e:
-            print(f"  ✗ {d}  {workouts.label(spec)} — {e}")
+    _print_push_results(result["results"])
 
 
 def _print_summary(res, files, outdir):
@@ -245,9 +276,13 @@ def cmd_send(args):
 
 
 def cmd_library(args):
+    # Bibliothèque de séances NOMINALES : construite à l'échelle 1.0, donc STABLE
+    # et indépendante du volume de l'athlète (start_volume_h). Le réalisé mis à
+    # l'échelle/adapté vit dans les runs hebdo (`send`), pas dans cette référence.
     os.makedirs(WORKOUTS_DIR, exist_ok=True)
     seen = {}
-    for w in program.PROGRAM:
+    for i in range(1, program.N_WEEKS + 1):
+        w = program.build_week_scaled(i, 1.0)
         for spec in w.sessions.values():
             seen.setdefault(workouts.slug(spec), spec)
     for key, spec in sorted(seen.items()):
@@ -400,6 +435,22 @@ def cmd_garmin_connect_token(args):
           "traite-le comme un mot de passe.")
 
 
+def cmd_serve(args):
+    """Lance l'interface web locale (dashboard, téléchargement .fit, push
+    Garmin). Import PARESSEUX : Flask ne doit jamais être requis pour les
+    autres sous-commandes ni pour la suite de tests."""
+    try:
+        from webapp.server import create_app
+    except ImportError as e:
+        raise SystemExit(f"Flask manquant : {e}\n"
+                         "Installe la dépendance optionnelle : "
+                         "pip install -r training/requirements-web.txt")
+    app = create_app()
+    port = args.port or 5000
+    print(f"Interface web locale : http://127.0.0.1:{port}  (local uniquement, Ctrl+C pour arrêter)")
+    app.run(host="127.0.0.1", port=port, debug=False)
+
+
 def cmd_config(args):
     c = config.summary()
     print("Profil athlète (mémoire intersessions) :")
@@ -452,6 +503,10 @@ def main(argv=None):
     sub.add_parser("library", help="Génère toutes les séances nominales").set_defaults(func=cmd_library)
     sub.add_parser("plan", help="Régénère plan.md et plan.html").set_defaults(func=cmd_plan)
     sub.add_parser("config", help="Affiche le profil athlète effectif").set_defaults(func=cmd_config)
+
+    psv = sub.add_parser("serve", help="Lance l'interface web locale (dashboard, .fit, push Garmin)")
+    psv.add_argument("--port", type=int, default=5000)
+    psv.set_defaults(func=cmd_serve)
 
     po = sub.add_parser("onboard", help="Écrit le profil athlète (athlete.json) et marque onboarded")
     po.add_argument("--objective")

@@ -77,5 +77,59 @@ class TestEncoder(unittest.TestCase):
                 os.unlink(path)
 
 
+class TestHeartRateTargets(unittest.TestCase):
+    """Cadrage FC Z2 des séances aérobies (anti-dérive Z3)."""
+
+    def test_aerobic_uses_hr_when_zone_configured(self):
+        from engine import config
+        from engine.fit_encoder import Target
+        if not config.HR_ZONE2:
+            self.skipTest("pas de zone FC dans le profil courant")
+        z = config.HR_ZONE2
+        for tpl, params in (("easy", {"minutes": 60}),
+                            ("long", {"minutes": 180}),
+                            ("b2b", {"minutes": 90})):
+            w = workouts.build_workout(SessionSpec(tpl, params))
+            step = w.steps[0]
+            self.assertEqual(step.target_type, Target.HEART_RATE, f"{tpl} devrait cibler la FC")
+            # convention FIT : bpm + 100
+            self.assertEqual(step.custom_low - 100, z["min"])
+            self.assertEqual(step.custom_high - 100, z["max"])
+
+    def test_recovery_below_z2(self):
+        from engine import config
+        if not config.HR_ZONE2:
+            self.skipTest("pas de zone FC dans le profil courant")
+        w = workouts.build_workout(SessionSpec("recovery", {"minutes": 40}))
+        self.assertLessEqual(w.steps[0].custom_high - 100, config.HR_ZONE2["min"])
+
+    def test_quality_stays_pace_based(self):
+        from engine.fit_encoder import Target
+        w = workouts.build_workout(SessionSpec("threshold", {"reps": 3, "rep_min": 10}))
+        # le bloc "Seuil" garde une cible d'allure quelle que soit la zone FC
+        seuil = next(s for s in w.steps if s.name == "Seuil")
+        self.assertEqual(seuil.target_type, Target.SPEED)
+
+    def test_falls_back_to_pace_without_zone(self):
+        import importlib
+        from engine import config
+        from engine.fit_encoder import Target
+        saved = config.HR_ZONE2
+        try:
+            config.HR_ZONE2 = None
+            w = workouts.build_workout(SessionSpec("easy", {"minutes": 60}))
+            self.assertEqual(w.steps[0].target_type, Target.SPEED)
+        finally:
+            config.HR_ZONE2 = saved
+
+
+class TestYardPace(unittest.TestCase):
+    def test_yard_slower_than_long(self):
+        """La boucle backyard doit être plus LENTE que la sortie longue
+        (tenable 24 h, pas un tempo)."""
+        self.assertGreater(workouts._pace_seconds(workouts.PACES["yard"]),
+                           workouts._pace_seconds(workouts.PACES["long"]))
+
+
 if __name__ == "__main__":
     unittest.main()

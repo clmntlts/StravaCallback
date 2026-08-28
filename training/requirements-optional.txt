@@ -10,4 +10,8 @@ fitdecode
 # Planification au calendrier Garmin Connect via la voie NON-OFFICIELLE
 # (generate.py send --push-connect / garmin-connect-login).
 # API rétro-ingénierée : peut casser si Garmin change son service.
-garminconnect
+# Épinglé sur la ligne 0.3.x : engine/garmin_connect.py utilise son API de
+# session (client.client.dumps/loads, Garmin.login(tokenstore=...)). La 0.3
+# a supprimé la dépendance `garth` et l'attribut `client.garth` des versions
+# antérieures — ne pas relâcher la borne sans porter le code.
+garminconnect>=0.3,<0.4

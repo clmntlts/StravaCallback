@@ -1,0 +1,4 @@
+# Dépendance optionnelle pour l'interface web locale (generate.py serve).
+# Jamais requise pour le coeur du moteur ni pour la suite de tests — import
+# paresseux dans training/webapp/server.py, comme fitdecode/garminconnect.
+flask

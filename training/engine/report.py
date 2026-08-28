@@ -49,6 +49,24 @@ def week_report_md(res: AdaptResult, last: WeekSummary, files: dict, analysis=No
                  f"{mins/60:.1f} h | `{files.get(role,'')}` |")
     L.append(f"\n**Total semaine : {program.planned_hours(w):.1f} h**\n")
 
+    tips = [(role, workouts.tip(w.sessions[role])) for role in _ordered_roles(w)]
+    tips = [(r, t) for r, t in tips if t]
+    if tips:
+        L.append("\n## Consignes spécifiques\n")
+        L.extend(f"- **{r}** — {t}" for r, t in tips)
+
+    # Marge du plan à 4 jours : le cross-training (aérobie sans impact) est LE
+    # multiplicateur de volume sûr. Rappelé en phase de construction (hors
+    # décharge et hors affûtage, où l'on cherche la fraîcheur, pas le volume).
+    if not w.deload and w.phase not in ("Affûtage",):
+        L.append("\n## Marge des 4 jours : le cross-training\n")
+        L.append("Sur 4 jours de course, ton volume plafonne — ta marge est là. "
+                 "Ajoute **2-4 h/sem de vélo/elliptique** (aérobie, **sans impact**) "
+                 "sur tes jours off : ça construit la caisse et **compte dans ta "
+                 "charge de base** (pas de fausse régression du plan), sans le "
+                 "risque blessure d'un 5ᵉ jour de course. Garde les jambes fraîches "
+                 "pour le week-end longue/B2B, qui reste prioritaire.")
+
     if res.adjustments:
         L.append("\n## Ajustements appliqués\n")
         for a in res.adjustments:
@@ -99,6 +117,7 @@ def week_report_json(res: AdaptResult, last: WeekSummary, files: dict, analysis=
                 "params": w.sessions[role].params,
                 "label": workouts.label(w.sessions[role]),
                 "minutes": round(workouts.minutes(w.sessions[role]), 1),
+                "tip": workouts.tip(w.sessions[role]),
                 "file": files.get(role),
             }
             for role in _ordered_roles(w)
@@ -166,12 +185,33 @@ def plan_data_json() -> list:
     return rows
 
 
+_MONTHS_FR = ["", "janv.", "févr.", "mars", "avr.", "mai", "juin",
+              "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+
+def plan_meta_json() -> dict:
+    """En-tête du plan piloté par le profil (objectif, jours, saison) — évite le
+    texte codé en dur qui devient faux quand le profil change."""
+    from . import config
+    start, race = program.PROGRAM_START, program.race_date()
+    return {
+        "objective": config.OBJECTIVE,
+        "days": config.DAYS_PER_WEEK,
+        "weeks": program.N_WEEKS,
+        "season": f"{_MONTHS_FR[start.month]} → {_MONTHS_FR[race.month]}",
+    }
+
+
 def update_plan_html(path: str) -> None:
-    """Réinjecte les données du programme dans le tableau `const DATA = ...`."""
+    """Réinjecte les données du programme (`const DATA`) et l'en-tête piloté par
+    le profil (`const META`) dans le HTML du plan."""
     with open(path, encoding="utf-8") as f:
         html = f.read()
-    data = json.dumps(plan_data_json(), ensure_ascii=False)
-    new = re.sub(r"const DATA = \[.*?\];",
-                 "const DATA = " + data + ";", html, count=1, flags=re.S)
+    html = re.sub(r"const DATA = \[.*?\];",
+                  "const DATA = " + json.dumps(plan_data_json(), ensure_ascii=False) + ";",
+                  html, count=1, flags=re.S)
+    html = re.sub(r"const META = \{.*?\};",
+                  "const META = " + json.dumps(plan_meta_json(), ensure_ascii=False) + ";",
+                  html, count=1, flags=re.S)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(new)
+        f.write(html)

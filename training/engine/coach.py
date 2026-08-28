@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from .models import Activity, WeekSummary
-from .workouts import PACES, _pace_seconds
+from . import workouts
 
 
 @dataclass
@@ -129,8 +129,8 @@ def analyze(summary: WeekSummary, week_runs: List[Activity],
     longest_s = summary.longest_run_s
     long_share = (longest_s / total_s) if total_s else 0
     adh = summary.adherence
-    easy_s = _pace_seconds(PACES["easy"])
-    steady_s = _pace_seconds(PACES["steady"])
+    easy_s = workouts._pace_seconds(workouts.PACES["easy"])
+    steady_s = workouts._pace_seconds(workouts.PACES["steady"])
 
     # --- Volume / régularité --------------------------------------------- #
     if summary.planned_time_s > 0:
