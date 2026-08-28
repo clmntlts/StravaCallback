@@ -7,6 +7,20 @@ set -uo pipefail
 DIR="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 GEN="$DIR/training/generate.py"
 
+# Charge training/.env dans l'environnement de CE hook (jamais dans le shell
+# persistant de l'utilisateur) AVANT les checks "Accès configurés" ci-dessous :
+# generate.py charge lui-même .env au runtime (_load_dotenv), donc l'app voit
+# ces secrets même sans export shell — sans ce chargement ici, le hook lisait
+# uniquement l'env shell brut et annonçait à tort "non configuré" pour tout ce
+# qui n'existe QUE dans .env (jamais affiché en clair : `check()` n'imprime
+# que [x]/[ ], jamais les valeurs).
+if [ -f "$DIR/training/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$DIR/training/.env"
+  set +a
+fi
+
 # Dépendances optionnelles (best-effort, jamais bloquant) :
 #  - fitdecode : validation des .FIT dans les tests
 #  - garminconnect : planification au calendrier Garmin (send --push-connect)
