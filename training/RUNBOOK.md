@@ -240,10 +240,28 @@ python3 training/generate.py serve             # http://127.0.0.1:5000
 ```
 
 N'a aucun effet sur la Routine hebdo (cron/Tâche planifiée) : deux surfaces
-indépendantes sur le même moteur. Le chat (Q&A sur le plan, onboarding) prévu
-pour cette interface s'appuiera sur la CLI `claude` déjà installée en local
-(pas de clé API Anthropic séparée, pas de facturation à part — même mécanisme
-que la Routine hebdo qui invoque `claude -p "/weekly"`).
+indépendantes sur le même moteur.
+
+### Chat (onglet « Coach »)
+
+Pas de clé API Anthropic séparée, pas de facturation à part : le backend
+shelle out vers la CLI `claude` **déjà installée en local et authentifiée**
+(mêmes conditions que la Routine hebdo, qui invoque `claude -p "/weekly"`) —
+`claude login` une fois suffit, aucune variable d'environnement à ajouter.
+
+- **Questions sur le plan** (mode par défaut une fois le profil configuré) :
+  pur Q&A en lecture seule sur la semaine/le plan/le profil courants — aucun
+  outil (Bash/Edit/…) n'est donné à l'agent pour ce mode.
+- **Configuration du profil** (mode par défaut tant que `athlete.json` n'est
+  pas encore personnalisé, ou accessible via le bouton « Configurer mon
+  profil ») : reprend les questions de l'onboarding interactif
+  (objectif, date de course, jours/semaine, volume, allures…) directement
+  dans le chat. Une fois les réponses réunies, l'agent écrit le profil
+  lui-même via `python3 training/generate.py onboard …` — même frontière de
+  confiance que la Routine hebdo (`--dangerously-skip-permissions`), mais
+  restreinte au seul outil Bash (aucun autre), et le prompt système le borne
+  explicitement à cette unique commande. Le dashboard recharge
+  automatiquement le plan dès que `athlete.json` a été réécrit.
 
 ## Push Garmin (API officielle, Training API)
 

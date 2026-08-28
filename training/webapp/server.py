@@ -142,6 +142,23 @@ def create_app() -> "Flask":
         messages = body.get("messages")
         if not messages:
             return jsonify({"error": "messages manquant ou vide"}), 400
+
+        if body.get("mode") == "onboarding":
+            try:
+                mtime_before = os.path.getmtime(config.CONFIG_PATH)
+            except OSError:
+                mtime_before = None
+            system_prompt = chat.assemble_onboarding_system_prompt(config.summary())
+            reply = chat.run_onboarding_turn(messages, system_prompt)
+            try:
+                mtime_after = os.path.getmtime(config.CONFIG_PATH)
+            except OSError:
+                mtime_after = None
+            onboarded = mtime_after is not None and mtime_after != mtime_before
+            if onboarded:
+                _reload_engine()
+            return jsonify({"reply": reply, "onboarded": onboarded})
+
         idx = body.get("week_idx") or program.target_week_index(date.today())
         if not (1 <= idx <= program.N_WEEKS):
             return jsonify({"error": f"semaine {idx} hors programme "

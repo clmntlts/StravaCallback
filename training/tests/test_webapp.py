@@ -88,6 +88,7 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         data = r.get_json()
         self.assertIn("objective", data["meta"])
+        self.assertIn("onboarded", data["meta"])  # pilote le mode par défaut du chat (Phase 4)
         self.assertEqual(len(data["weeks"]), data["meta"]["weeks"])
         self.assertIn("current_week", data)
 
@@ -175,6 +176,15 @@ class TestChatAssembleSystemPrompt(unittest.TestCase):
         self.assertIn("days_per_week", prompt)
 
 
+class TestChatAssembleOnboardingSystemPrompt(unittest.TestCase):
+    def test_includes_command_and_current_profile(self):
+        from webapp import chat
+        prompt = chat.assemble_onboarding_system_prompt({"objective": None, "onboarded": False})
+        self.assertIn("generate.py onboard", prompt)
+        self.assertIn("onboarded", prompt)
+        self.assertIn("N'exécute AUCUNE autre commande", prompt)
+
+
 class TestChatRunTurn(unittest.TestCase):
     """`subprocess.run` monkeypatché : jamais de vrai appel `claude` ici."""
 
@@ -215,6 +225,35 @@ class TestChatRunTurn(unittest.TestCase):
         self.assertIn("introuvable", reply)
 
 
+class TestOnboardingRunTurn(unittest.TestCase):
+    """`subprocess.run` monkeypatché : jamais de vrai appel `claude` ici — un
+    vrai appel aurait Bash + permissions court-circuitées sur cette machine."""
+
+    @patch("webapp.chat.subprocess.run")
+    def test_uses_bash_only_skips_permissions_and_repo_root_cwd(self, mock_run):
+        from webapp import chat
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="Profil enregistré.\n", stderr="")
+        reply = chat.run_onboarding_turn(
+            [{"role": "user", "content": "Objectif : 24 tours"}], "SYSTEM-PROMPT")
+        self.assertEqual(reply, "Profil enregistré.")
+        args, kwargs = mock_run.call_args
+        cmd = args[0]
+        self.assertEqual(cmd[1], "-p")
+        self.assertIn("--tools", cmd)
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "Bash")  # jamais "" ni "default"
+        self.assertIn("--dangerously-skip-permissions", cmd)
+        self.assertEqual(kwargs["cwd"], chat.REPO_ROOT)
+
+    @patch("webapp.chat.subprocess.run")
+    def test_nonzero_exit_degrades_to_message(self, mock_run):
+        from webapp import chat
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="boom")
+        reply = chat.run_onboarding_turn([{"role": "user", "content": "hi"}], "SYS")
+        self.assertIn("boom", reply)
+
+
 @unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
 class TestChatRoute(unittest.TestCase):
     def setUp(self):
@@ -248,6 +287,39 @@ class TestChatRoute(unittest.TestCase):
         self.assertEqual(messages_arg[0]["content"], "Comment se passe la semaine ?")
         self.assertIsInstance(system_prompt_arg, str)
         self.assertIn("Semaine courante", system_prompt_arg)
+
+    @patch("webapp.server._reload_engine")
+    @patch("webapp.server.chat.run_onboarding_turn")
+    @patch("webapp.server.os.path.getmtime", side_effect=[1000.0, 2000.0])
+    def test_onboarding_mode_reloads_engine_when_profile_written(
+            self, mock_getmtime, mock_run_onboarding, mock_reload):
+        mock_run_onboarding.return_value = "Profil enregistré, regarde l'onglet Plan !"
+        r = self.client.post("/api/chat", json={
+            "messages": [{"role": "user", "content": "Objectif 24 tours, course le 2027-04-03"}],
+            "mode": "onboarding",
+        })
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertEqual(data["reply"], "Profil enregistré, regarde l'onglet Plan !")
+        self.assertTrue(data["onboarded"])
+        mock_reload.assert_called_once()
+        messages_arg, system_prompt_arg = mock_run_onboarding.call_args[0]
+        self.assertIn("24 tours", messages_arg[0]["content"])
+        self.assertIn("generate.py onboard", system_prompt_arg)
+
+    @patch("webapp.server._reload_engine")
+    @patch("webapp.server.chat.run_onboarding_turn")
+    @patch("webapp.server.os.path.getmtime", return_value=1000.0)
+    def test_onboarding_mode_no_reload_when_profile_unchanged(
+            self, mock_getmtime, mock_run_onboarding, mock_reload):
+        mock_run_onboarding.return_value = "D'accord, et ta date de course ?"
+        r = self.client.post("/api/chat", json={
+            "messages": [{"role": "user", "content": "Mon objectif : 24 tours"}],
+            "mode": "onboarding",
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.get_json()["onboarded"])
+        mock_reload.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -199,6 +199,7 @@ def plan_meta_json() -> dict:
         "days": config.DAYS_PER_WEEK,
         "weeks": program.N_WEEKS,
         "season": f"{_MONTHS_FR[start.month]} → {_MONTHS_FR[race.month]}",
+        "onboarded": config.ONBOARDED,
     }
 
 
