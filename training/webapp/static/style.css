@@ -11,39 +11,61 @@
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
   font-size:15px; line-height:1.45}
-.wrap{max-width:920px; margin:0 auto; padding:22px 16px 60px}
+.wrap{max-width:920px; margin:0 auto; padding:28px 20px 64px}
+
+a{color:var(--accent-dark)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
 
 header.hero{background:var(--surface); border:1px solid var(--border); border-radius:18px;
-  padding:18px 22px; margin-bottom:18px; display:flex; align-items:center;
+  padding:20px 24px; margin-bottom:22px; display:flex; align-items:center;
   justify-content:space-between; gap:16px; flex-wrap:wrap}
-header.hero h1{margin:0; font-size:1.3rem}
-header.hero .sub{color:var(--muted); font-size:.9rem; margin-top:3px}
+header.hero h1{margin:0; font-size:1.45rem; letter-spacing:-.01em}
+header.hero .sub{color:var(--muted); font-size:.9rem; margin-top:4px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-size:.82rem;
-  padding:4px 12px; border-radius:999px; background:var(--accent-bg);
+  padding:5px 13px; border-radius:999px; background:var(--accent-bg);
   border:1px solid #cfe5df; color:var(--accent-dark); font-weight:600}
 
-nav.tabs{display:flex; gap:8px; margin-bottom:16px}
-nav.tabs button{font:inherit; font-weight:600; padding:8px 16px; border-radius:10px;
-  border:1px solid var(--border); background:var(--surface); color:var(--muted); cursor:pointer}
+nav.tabs{display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap}
+nav.tabs button{font:inherit; font-weight:600; font-size:.88rem; padding:9px 18px;
+  border-radius:10px; border:1px solid var(--border); background:var(--surface);
+  color:var(--muted); cursor:pointer; transition:background-color .15s, border-color .15s, color .15s}
+nav.tabs button:hover:not(.active){background:var(--accent-bg2); color:var(--ink); border-color:#d8e8e4}
 nav.tabs button.active{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff}
 
 .card{background:var(--surface); border:1px solid var(--border); border-radius:16px;
-  padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 2px rgba(22,33,29,.05),
-  0 12px 28px -20px rgba(22,33,29,.24)}
-.card h2{margin:0 0 12px; font-size:1.02rem}
+  padding:20px 22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(22,33,29,.05),
+  0 16px 32px -22px rgba(22,33,29,.3)}
+.card h2{margin:0 0 14px; font-size:1.05rem; letter-spacing:-.005em}
 
-.week-nav{display:flex; align-items:center; gap:10px; margin-bottom:16px}
-.week-nav button{font:inherit; font-weight:700; width:34px; height:34px; border-radius:10px;
-  border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--ink)}
-.week-nav button:disabled{opacity:.35; cursor:default}
-.week-nav select{font:inherit; padding:7px 10px; border-radius:10px; border:1px solid var(--border)}
-.week-nav .live-btn{margin-left:auto; font-weight:600; color:var(--accent-dark);
-  background:var(--accent-bg); border:1px solid #cfe5df; border-radius:999px; padding:7px 14px; cursor:pointer}
-.week-nav .live-btn:disabled{opacity:.5; cursor:default}
+/* Système de boutons -------------------------------------------------- */
+button{font:inherit}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  font-weight:600; font-size:.85rem; white-space:nowrap; padding:9px 16px;
+  border-radius:10px; border:1px solid transparent; cursor:pointer;
+  transition:background-color .15s, border-color .15s, color .15s, transform .05s}
+.btn:disabled{opacity:.5; cursor:default}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn-primary{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff}
+.btn-primary:hover:not(:disabled){background:#0a4a43}
+.btn-secondary{background:var(--accent-bg); border-color:#cfe5df; color:var(--accent-dark)}
+.btn-secondary:hover:not(:disabled){background:#dcece6}
+.btn-icon{width:36px; height:36px; padding:0; border-radius:10px; font-weight:700;
+  background:var(--surface); border-color:var(--border); color:var(--ink)}
+.btn-icon:hover:not(:disabled){background:var(--bg); border-color:#c7ccc6}
 
-.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px}
+/* Petit badge d'état (décharge…) — jamais la couleur seule : toujours un
+   libellé texte accompagne ou précède ce point dans la vue elle-même. */
+.dot{display:inline-block; width:8px; height:8px; border-radius:50%; vertical-align:middle}
+.dot-deload{background:var(--warn)}
+
+.week-nav{display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap}
+.week-nav select{font:inherit; padding:8px 12px; border-radius:10px; border:1px solid var(--border);
+  background:var(--surface); color:var(--ink)}
+.week-nav .btn-secondary{margin-left:auto}
+
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:18px}
 .kpi{background:var(--surface); border:1px solid var(--border); border-radius:14px;
-  padding:12px 14px; border-top:3px solid #dfe4df}
+  padding:13px 15px; border-top:3px solid #dfe4df; transition:box-shadow .15s}
 .kpi.good{border-top-color:var(--good); background:var(--good-bg)}
 .kpi.warn{border-top-color:var(--warn); background:var(--warn-bg)}
 .kpi.bad{border-top-color:var(--bad); background:var(--bad-bg)}
@@ -51,8 +73,10 @@ nav.tabs button.active{background:var(--accent-dark); border-color:var(--accent-
 .kpi .kl{font-size:.78rem; color:var(--muted); margin-top:3px; font-weight:600}
 
 table{width:100%; border-collapse:collapse}
-td,th{padding:9px 6px; border-bottom:1px solid var(--bg); vertical-align:middle; text-align:left}
-th{font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint)}
+td,th{padding:11px 8px; border-bottom:1px solid var(--bg); vertical-align:middle; text-align:left}
+th{font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); padding-top:0}
+tbody tr{transition:background-color .1s}
+tbody tr:hover{background:var(--accent-bg2)}
 td.n{text-align:right; font-family:var(--mono); color:var(--accent-dark)}
 .role{font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint)}
 .tip{font-size:.82rem; color:var(--muted); margin-top:2px}
@@ -66,13 +90,22 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .deload-tag{text-transform:uppercase; font-size:.68rem; font-weight:700; color:var(--warn);
   background:var(--warn-bg); border:1px solid #ecdcbd; border-radius:999px; padding:2px 9px}
 
-.banner{border-radius:12px; padding:10px 14px; font-size:.86rem; margin-bottom:14px}
+.banner{border-radius:12px; padding:11px 15px; font-size:.86rem; margin-bottom:14px}
 .banner.warn{background:var(--warn-bg); color:#8a5a0e; border:1px solid #ecdcbd}
 .banner.muted{background:var(--bg); color:var(--muted); border:1px solid var(--border)}
 
+.muted-inline{color:var(--muted)}
+.subhead{margin-top:18px}
+.actions-row{margin-top:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.mt-3{margin-top:12px}
+.mt-2{margin-top:6px}
+
 .plan-table td, .plan-table th{font-size:.85rem}
 .plan-table td.wk{font-family:var(--mono); color:var(--faint); width:40px}
+.plan-table td.wk .dot{margin-left:6px}
 .plan-table tr.current{background:var(--accent-bg2)}
+.legend{display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--muted);
+  margin:-4px 0 12px}
 
 .loading{color:var(--faint); font-size:.9rem; padding:20px 0; text-align:center}
 
@@ -91,13 +124,15 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .chat-bubble.loading{color:var(--faint); background:var(--bg); border:1px solid var(--border)}
 .chat-form{display:flex; gap:8px}
 .chat-form input{flex:1; font:inherit; padding:9px 12px; border-radius:10px;
-  border:1px solid var(--border)}
-.chat-form button{font:inherit; font-weight:600; padding:9px 16px; border-radius:10px;
-  border:1px solid var(--accent-dark); background:var(--accent-dark); color:#fff; cursor:pointer}
-.chat-form button:disabled{opacity:.5; cursor:default}
+  border:1px solid var(--border); background:var(--surface); color:var(--ink)}
+.chat-form input:focus-visible{border-color:var(--accent)}
+
+.card-header-row{display:flex; align-items:center; justify-content:space-between;
+  gap:10px; flex-wrap:wrap; margin-bottom:14px}
+.card-header-row h2{margin:0}
 
 /* Onglet Historique ------------------------------------------------------ */
-.hist-toolbar{display:flex; gap:10px; margin-bottom:16px}
+.hist-toolbar{display:flex; gap:10px; margin-bottom:18px}
 
 /* Barres — volume hebdomadaire */
 .hist-bars-wrap{display:flex; gap:10px; height:180px}

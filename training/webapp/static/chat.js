@@ -33,9 +33,9 @@ function chatRender() {
 
   el.innerHTML = `
     <div class="card chat-card">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap">
+      <div class="card-header-row">
         <h2>Coach — ${onboarding ? "configuration du profil" : "questions sur ton plan"}</h2>
-        <button type="button" id="chat-mode-toggle" class="live-btn">
+        <button type="button" id="chat-mode-toggle" class="btn btn-secondary">
           ${onboarding ? "Revenir aux questions" : "Configurer mon profil"}
         </button>
       </div>
@@ -44,7 +44,7 @@ function chatRender() {
       <form id="chat-form" class="chat-form">
         <input type="text" id="chat-input" placeholder="Écris ta réponse…"
           autocomplete="off" ${chatState.busy ? "disabled" : ""}>
-        <button type="submit" ${chatState.busy ? "disabled" : ""}>Envoyer</button>
+        <button type="submit" class="btn btn-primary" ${chatState.busy ? "disabled" : ""}>Envoyer</button>
       </form>
     </div>`;
   const log = document.getElementById("chat-log");

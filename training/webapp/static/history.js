@@ -40,10 +40,10 @@ function historyRender() {
 
   const toolbar = `
     <div class="hist-toolbar">
-      <button type="button" id="hist-refresh" class="live-btn" ${historyState.loading ? "disabled" : ""}>
+      <button type="button" id="hist-refresh" class="btn btn-secondary" ${historyState.loading ? "disabled" : ""}>
         ${historyState.loading ? "Actualisation…" : "Actualiser depuis Strava"}
       </button>
-      <button type="button" id="hist-table-toggle" class="live-btn">
+      <button type="button" id="hist-table-toggle" class="btn btn-secondary">
         ${historyState.showTable ? "Voir les graphiques" : "Voir en tableau"}
       </button>
     </div>`;

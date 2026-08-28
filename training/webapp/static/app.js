@@ -74,10 +74,10 @@ function renderWeekNav() {
   }
   return `
     <div class="week-nav">
-      <button id="wk-prev" ${idx <= 1 ? "disabled" : ""}>&larr;</button>
+      <button class="btn btn-icon" id="wk-prev" ${idx <= 1 ? "disabled" : ""} aria-label="Semaine précédente">&larr;</button>
       <select id="wk-select">${opts}</select>
-      <button id="wk-next" ${idx >= n ? "disabled" : ""}>&rarr;</button>
-      <button class="live-btn" id="wk-live" ${state.liveBusy ? "disabled" : ""}>
+      <button class="btn btn-icon" id="wk-next" ${idx >= n ? "disabled" : ""} aria-label="Semaine suivante">&rarr;</button>
+      <button class="btn btn-secondary" id="wk-live" ${state.liveBusy ? "disabled" : ""}>
         ${state.liveBusy ? "Récupération…" : "Charger Strava (live)"}
       </button>
     </div>`;
@@ -107,7 +107,7 @@ function renderWeekView() {
         <div class="kl">ACWR</div>
       </div>
       <div class="kpi">
-        <div class="kn">${w.phase}${w.deload ? " 🟢" : ""}</div>
+        <div class="kn">${w.phase}${w.deload ? ' <span class="dot dot-deload" title="Semaine de décharge"></span>' : ""}</div>
         <div class="kl">Phase</div>
       </div>
     </div>`;
@@ -126,7 +126,7 @@ function renderWeekView() {
   const adj = (w.adjustments || []).length
     ? `<div class="card"><h2>Ajustements</h2><ul class="adj">
         ${w.adjustments.map((a) => `<li><strong>${esc(a.role)}</strong> ${esc(a.before)} &rarr; ${esc(a.after)}
-          <span style="color:var(--muted)"> · ${esc(a.reason)}</span></li>`).join("")}
+          <span class="muted-inline"> · ${esc(a.reason)}</span></li>`).join("")}
        </ul></div>`
     : "";
 
@@ -135,8 +135,8 @@ function renderWeekView() {
       <h2>Debrief coach</h2>
       <p><strong>${esc(w.analysis.headline)}</strong></p>
       ${w.analysis.observations.length ? `<ul class="adj">${w.analysis.observations.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
-      ${(w.analysis.trends || []).length ? `<h2 style="margin-top:14px">Tendances</h2><ul class="adj">${w.analysis.trends.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
-      ${w.analysis.recommendations.length ? `<h2 style="margin-top:14px">Recommandations</h2><ul class="adj">${w.analysis.recommendations.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
+      ${(w.analysis.trends || []).length ? `<h2 class="subhead">Tendances</h2><ul class="adj">${w.analysis.trends.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
+      ${w.analysis.recommendations.length ? `<h2 class="subhead">Recommandations</h2><ul class="adj">${w.analysis.recommendations.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
     </div>` : "";
 
   el.innerHTML = `
@@ -151,8 +151,8 @@ function renderWeekView() {
           <thead><tr><th>Jour</th><th>Séance</th><th style="text-align:right">Durée</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
-        <div style="margin-top:14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
-          <button class="live-btn" id="wk-push" ${state.pushBusy ? "disabled" : ""}>
+        <div class="actions-row">
+          <button class="btn btn-secondary" id="wk-push" ${state.pushBusy ? "disabled" : ""}>
             ${state.pushBusy ? "Envoi…" : "Planifier sur Garmin"}
           </button>
         </div>
@@ -168,23 +168,23 @@ function renderPushResult() {
   const res = state.pushResult;
   if (!res) return "";
   if (res.error) {
-    return `<div class="banner warn" style="margin-top:12px">${esc(res.error)}</div>`;
+    return `<div class="banner warn mt-3">${esc(res.error)}</div>`;
   }
   if (!res.configured) {
-    return `<div class="banner muted" style="margin-top:12px">
+    return `<div class="banner muted mt-3">
       Garmin non configuré (ni Training API officielle, ni Garmin Connect) —
       voir <code>training/RUNBOOK.md</code>.</div>`;
   }
   if (res.detail) {
-    return `<div class="banner warn" style="margin-top:12px">
+    return `<div class="banner warn mt-3">
       ${esc(res.via)} : ${esc(res.detail)}</div>`;
   }
   const rows = res.results.map((r) => `
     <li>${r.ok ? "✓" : "✗"} <strong>${esc(r.date)}</strong> ${esc(r.label)}
-      <span style="color:var(--muted)"> · ${esc(r.detail)}</span></li>`).join("");
-  return `<div class="banner ${res.ok ? "muted" : "warn"}" style="margin-top:12px">
+      <span class="muted-inline"> · ${esc(r.detail)}</span></li>`).join("");
+  return `<div class="banner ${res.ok ? "muted" : "warn"} mt-3">
     <div>Voie : <strong>${esc(res.via)}</strong></div>
-    <ul class="adj" style="margin-top:6px">${rows}</ul>
+    <ul class="adj mt-2">${rows}</ul>
   </div>`;
 }
 
@@ -229,7 +229,7 @@ function renderPlanView() {
   const el = document.getElementById("view-plan");
   const rows = state.plan.weeks.map((w) => `
     <tr class="${w.wk === state.plan.current_week ? "current" : ""}">
-      <td class="wk">${w.wk}${w.deload ? " 🟢" : ""}</td>
+      <td class="wk">${w.wk}${w.deload ? ' <span class="dot dot-deload" title="Décharge"></span>' : ""}</td>
       <td>${esc(w.phase)}</td>
       <td>${w.s.map(esc).join(" · ")}</td>
       <td class="n">${w.h.toFixed(1)} h</td>
@@ -237,6 +237,7 @@ function renderPlanView() {
   el.innerHTML = `
     <div class="card">
       <h2>Plan — ${state.plan.meta.weeks} semaines (${esc(state.plan.meta.season)})</h2>
+      <div class="legend"><span class="dot dot-deload"></span> décharge</div>
       <table class="plan-table">
         <thead><tr><th>Sem.</th><th>Phase</th><th>Séances</th><th style="text-align:right">Total</th></tr></thead>
         <tbody>${rows}</tbody>
