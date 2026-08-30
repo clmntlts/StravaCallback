@@ -18,7 +18,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from . import config
+from . import clock, config
 from .models import Activity, WeekSummary
 
 STRAVA_API = "https://www.strava.com/api/v3"
@@ -270,7 +270,7 @@ def weekly_actual_hours(acts: List[Activity], start: date, n_weeks: int,
 
     None = semaine future (postérieure à aujourd'hui) → pas encore de données.
     """
-    today = today or datetime.now(timezone.utc).date()
+    today = today or clock.today()
     buckets: List[Optional[float]] = [None] * n_weeks
     for i in range(n_weeks):
         wk_start = start + timedelta(days=7 * i)
@@ -289,7 +289,7 @@ def weekly_actual_hours(acts: List[Activity], start: date, n_weeks: int,
 
 def completed_week_runs(acts: List[Activity], today: Optional[date] = None) -> List[Activity]:
     """Courses de la semaine qui vient de se terminer (relative au lundi à venir)."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or clock.today()
     um = today + timedelta(days=(7 - today.weekday()) % 7)
     return _runs(in_range(acts, um - timedelta(days=7), um))
 
@@ -297,7 +297,7 @@ def completed_week_runs(acts: List[Activity], today: Optional[date] = None) -> L
 def recent_completed_weeks(acts: List[Activity], today: Optional[date] = None,
                            n: int = 4) -> List[List[Activity]]:
     """Courses des `n` dernières semaines terminées ; index 0 = la plus récente."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or clock.today()
     um = today + timedelta(days=(7 - today.weekday()) % 7)
     out = []
     for k in range(n):
@@ -368,7 +368,7 @@ def completed_week_summary(acts: List[Activity], planned_time_s: int,
     dimanche (celle dont on va prescrire la suivante). Exécuté un lundi → la
     semaine précédente. Chronique = 3 semaines antérieures (ACWR non-couplé).
     """
-    today = today or datetime.now(timezone.utc).date()
+    today = today or clock.today()
     um = today + timedelta(days=(7 - today.weekday()) % 7)  # lundi à venir
     completed_start = um - timedelta(days=7)                 # lundi de la sem. terminée
     week_acts = in_range(acts, completed_start, um)

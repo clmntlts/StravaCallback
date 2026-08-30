@@ -221,6 +221,31 @@ class TestActivitiesFileErrors(unittest.TestCase):
             os.unlink(path)
 
 
+class TestSingleDateSource(unittest.TestCase):
+    """#26 : une seule source de date par défaut (clock.today), honorée aussi
+    bien côté plan (program) que côté réalisé (strava) — plus de mélange
+    date.today() local vs datetime.now(UTC) qui décalait d'un jour aux
+    frontières de semaine."""
+
+    def test_program_default_today_routes_through_clock(self):
+        from unittest import mock
+        from engine import clock
+        fixed = date(2026, 9, 14)
+        with mock.patch.object(clock, "today", return_value=fixed):
+            self.assertEqual(program.current_week_index(),
+                             program.current_week_index(fixed))
+            self.assertEqual(program.target_week_index(),
+                             program.target_week_index(fixed))
+
+    def test_strava_default_today_routes_through_clock(self):
+        from unittest import mock
+        from engine import clock
+        fixed, start = date(2026, 9, 14), date(2026, 8, 10)
+        with mock.patch.object(clock, "today", return_value=fixed):
+            got = strava.weekly_actual_hours([], start, 8)
+        self.assertEqual(got, strava.weekly_actual_hours([], start, 8, today=fixed))
+
+
 class TestGarminTranslate(unittest.TestCase):
     def test_interval_nests_repeat_block(self):
         w = garmin_workout.session_to_garmin(

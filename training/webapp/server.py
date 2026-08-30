@@ -16,7 +16,7 @@ import importlib
 import os
 import sys
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -27,7 +27,7 @@ if HERE not in sys.path:
 from flask import Flask, Response, jsonify, request, send_from_directory  # noqa: E402
 
 import generate                                                          # noqa: E402
-from engine import coach, config, program, push, report, strava, workouts  # noqa: E402
+from engine import clock, coach, config, program, push, report, strava, workouts  # noqa: E402
 from engine.fit_encoder import encode as encode_fit                      # noqa: E402
 from engine.models import ordered_roles                                 # noqa: E402
 from webapp import chat                                                 # noqa: E402
@@ -140,7 +140,7 @@ def create_app() -> "Flask":
         return jsonify({
             "meta": report.plan_meta_json(),
             "weeks": report.plan_data_json(),
-            "current_week": program.target_week_index(date.today()),
+            "current_week": program.target_week_index(clock.today()),
         })
 
     @app.get("/api/week/<int:idx>")
@@ -148,7 +148,7 @@ def create_app() -> "Flask":
         if not (1 <= idx <= program.N_WEEKS):
             return jsonify({"error": f"semaine {idx} hors programme "
                                      f"(1..{program.N_WEEKS})"}), 404
-        today = date.today()
+        today = clock.today()
         acts, strava_error = (None, None)
         if request.args.get("live") == "1":
             acts, strava_error = _load_live_activities()
@@ -169,7 +169,7 @@ def create_app() -> "Flask":
             if request.args.get("refresh") == "1":
                 _history_cache.clear()
             if "data" not in _history_cache:
-                today = date.today()
+                today = clock.today()
                 end = today + timedelta(days=1)
                 raw_start = today - timedelta(days=365)
                 start = raw_start - timedelta(days=raw_start.weekday())
@@ -235,7 +235,7 @@ def create_app() -> "Flask":
         # en défaut au lieu de le valider comme hors-programme.
         raw_idx = body.get("week_idx")
         if raw_idx is None:
-            idx = program.target_week_index(date.today())
+            idx = program.target_week_index(clock.today())
         else:
             try:
                 idx = int(raw_idx)
@@ -244,7 +244,7 @@ def create_app() -> "Flask":
         if not (1 <= idx <= program.N_WEEKS):
             return jsonify({"error": f"semaine {idx} hors programme "
                                      f"(1..{program.N_WEEKS})"}), 404
-        res, last, actuals, analysis = generate._prepare_week(idx, None, date.today())
+        res, last, actuals, analysis = generate._prepare_week(idx, None, clock.today())
         with _cache_lock:
             _week_cache[idx] = res
         week_json = report.week_report_json(res, last, _files_for_week(res), analysis)

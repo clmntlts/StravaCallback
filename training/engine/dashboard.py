@@ -21,7 +21,7 @@ from typing import List, Optional
 
 from .adapt import ACWR_BRAKE, ACWR_CAUTION, ACWR_LOW, AdaptResult
 from .models import ROLE_DAY, WeekSummary, ordered_roles
-from . import program, workouts
+from . import clock, program, workouts
 
 # Séances "longues/spécifiques" dont le volume est piloté par le plafond de sécurité.
 _LONG_TEMPLATES = {"long", "runwalk", "backyard", "night", "b2b"}
@@ -281,7 +281,7 @@ def _analysis_html(analysis) -> str:
 def build(res: AdaptResult, last: WeekSummary,
           actual_hours: List[Optional[float]], analysis=None,
           today: Optional[date] = None) -> str:
-    today = today or date.today()
+    today = today or clock.today()
     w = res.week
     idx = w.index
     planned = [program.planned_hours(pw) for pw in program.PROGRAM]

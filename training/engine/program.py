@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
 from .models import ROLES, PlannedWeek, SessionSpec
-from . import adapt, config, workouts
+from . import adapt, clock, config, workouts
 
 
 def S(template: str, **params) -> SessionSpec:
@@ -381,7 +381,7 @@ def week_end(index: int) -> date:
 
 def current_week_index(today: Optional[date] = None) -> int:
     """Numéro de semaine de programme correspondant à `today` (borné 1..N)."""
-    today = today or date.today()
+    today = today or clock.today()
     delta = (today - PROGRAM_START).days
     if delta < 0:
         return 1
@@ -394,7 +394,7 @@ def upcoming_monday(today: Optional[date] = None) -> date:
     Permet une exécution dimanche soir : on cible la semaine qui commence demain,
     et on évalue le réalisé sur la semaine qui vient de se terminer.
     """
-    today = today or date.today()
+    today = today or clock.today()
     return today + timedelta(days=(7 - today.weekday()) % 7)
 
 
@@ -411,5 +411,5 @@ def race_date() -> date:
 
 
 def days_to_race(today: Optional[date] = None) -> int:
-    today = today or date.today()
+    today = today or clock.today()
     return (race_date() - today).days
