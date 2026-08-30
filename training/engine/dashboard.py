@@ -125,9 +125,25 @@ def _load_curve_html(planned: List[float], actual: List[Optional[float]],
 
 # --------------------------------------------------------------------------- #
 def _stat(value, label, sub="", cls=""):
+    """Une cellule KPI en `<td>` (email-safe) — Gmail vide `display:grid`,
+    donc la grille passe par une table (cf. `_kpis_table`), pas un conteneur grid."""
     sub = f'<div class="ks">{_esc(sub)}</div>' if sub else ""
-    return (f'<div class="kpi {cls}"><div class="kv">{_esc(value)}</div>'
-            f'<div class="kl">{_esc(label)}</div>{sub}</div>')
+    return (f'<td class="kpi {cls}" width="50%" valign="top">'
+            f'<div class="kv">{_esc(value)}</div>'
+            f'<div class="kl">{_esc(label)}</div>{sub}</td>')
+
+
+def _kpis_table(cells) -> str:
+    """Assemble les cellules KPI en table 2 colonnes (email-safe). Nombre
+    impair : la dernière ligne est complétée par une cellule vide (#25)."""
+    rows = ""
+    for i in range(0, len(cells), 2):
+        pair = list(cells[i:i + 2])
+        if len(pair) == 1:
+            pair.append('<td class="kpi-empty" width="50%"></td>')
+        rows += f"<tr>{''.join(pair)}</tr>"
+    return ('<table class="kpis" cellpadding="0" cellspacing="6" '
+            f'role="presentation"><tbody>{rows}</tbody></table>')
 
 
 def _adh_cls(a):
@@ -309,19 +325,20 @@ def build(res: AdaptResult, last: WeekSummary,
 
     # KPI (this week volume + bilan N-1)
     has_prev = last.n_runs or last.planned_time_s
-    kpis = _stat(f"{program.planned_hours(w):.1f} h", "Volume cette semaine",
-                 f"statut : {_BAND_LABEL.get(res.band, res.band)}")
+    cells = [_stat(f"{program.planned_hours(w):.1f} h", "Volume cette semaine",
+                   f"statut : {_BAND_LABEL.get(res.band, res.band)}")]
     if has_prev:
-        kpis += _stat(f"{last.adherence:.0%}", "Adhérence N-1",
-                      f"{last.actual_hours:.1f}h / {last.planned_hours:.1f}h",
-                      cls=_adh_cls(last.adherence))
-        kpis += _stat(f"{last.acwr:.2f}" if last.acwr is not None else "—",
-                      "Charge aiguë/chronique",
-                      "zone sûre 0,8–1,3", cls=_acwr_cls(last.acwr))
-        kpis += _stat(f"{last.longest_run_s/60:.0f}′", "Plus longue N-1",
-                      f"{last.n_runs} sorties · {last.total_dist_m/1000:.0f} km")
+        cells.append(_stat(f"{last.adherence:.0%}", "Adhérence N-1",
+                           f"{last.actual_hours:.1f}h / {last.planned_hours:.1f}h",
+                           cls=_adh_cls(last.adherence)))
+        cells.append(_stat(f"{last.acwr:.2f}" if last.acwr is not None else "—",
+                           "Charge aiguë/chronique",
+                           "zone sûre 0,8–1,3", cls=_acwr_cls(last.acwr)))
+        cells.append(_stat(f"{last.longest_run_s/60:.0f}′", "Plus longue N-1",
+                           f"{last.n_runs} sorties · {last.total_dist_m/1000:.0f} km"))
     else:
-        kpis += _stat("—", "Semaine précédente", "pas de données")
+        cells.append(_stat("—", "Semaine précédente", "pas de données"))
+    kpis = _kpis_table(cells)
 
     return _PAGE.format(
         idx=idx, n=program.N_WEEKS, phase=_esc(w.phase), pct=pct,
@@ -346,18 +363,18 @@ _PAGE = """<!DOCTYPE html>
 body{{margin:0; background:#eef1ee; color:#16211d;
   font-family:"Barlow",-apple-system,Segoe UI,Roboto,sans-serif; line-height:1.5;
   -webkit-font-smoothing:antialiased;}}
-.wrap{{max-width:800px; margin:0 auto; padding:clamp(16px,4vw,40px)}}
+.wrap{{max-width:800px; margin:0 auto; padding:28px 20px}}
 
 /* Hero */
 .hero{{background:#ffffff; border:1px solid #e0e5e0; border-radius:18px;
-  padding:clamp(18px,3.4vw,26px); position:relative; overflow:hidden;
+  padding:24px; position:relative; overflow:hidden;
   box-shadow:0 1px 2px rgba(22,33,29,.05), 0 18px 40px -26px rgba(22,33,29,.30)}}
 .hero:before{{content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
   background:#157a6e}}
 .eyebrow{{font-family:"Barlow Condensed",sans-serif; text-transform:uppercase;
   letter-spacing:.16em; color:#0e5c53; font-weight:700; font-size:.76rem}}
 h1{{font-family:"Barlow Condensed",sans-serif; font-weight:700;
-  font-size:clamp(2.1rem,5.6vw,3.1rem); margin:.04em 0 .08em; line-height:1; letter-spacing:-.01em}}
+  font-size:2.4rem; margin:.04em 0 .08em; line-height:1; letter-spacing:-.01em}}
 h1 .of{{color:#9aa39c; font-weight:600}}
 .sub{{color:#41504a; margin:0; font-weight:500}}
 .sub .ph{{display:inline-block; font-family:"Barlow Condensed",sans-serif;
@@ -366,8 +383,8 @@ h1 .of{{color:#9aa39c; font-weight:600}}
   padding:2px 10px; margin-right:8px}}
 
 .progress{{margin:16px 0 8px}}
-.progress .ptrow{{display:flex; justify-content:space-between; align-items:baseline;
-  margin-bottom:6px}}
+.progress .ptrow{{width:100%; margin-bottom:6px}}
+.progress .ptrow td{{padding:0}}
 .progress .track{{width:100%; height:9px; border-radius:999px; background:#e4e8e4;
   overflow:hidden}}
 .progress .fill{{display:block; height:9px; background:#157a6e; border-radius:999px;
@@ -380,10 +397,10 @@ h1 .of{{color:#9aa39c; font-weight:600}}
   border:1px solid #e0e5e0; color:#41504a}}
 .pill b{{color:#0e5c53}}
 
-.kpis{{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;
-  margin:16px 0}}
+.kpis{{width:100%; margin:16px 0}}
 .kpi{{background:#ffffff; border:1px solid #e0e5e0; border-radius:14px;
-  padding:14px 15px; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 12px 28px -18px rgba(22,33,29,.24); border-top:3px solid #dfe4df}}
+  padding:14px 15px; vertical-align:top; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 12px 28px -18px rgba(22,33,29,.24); border-top:3px solid #dfe4df}}
+.kpi-empty{{padding:0; border:none; background:transparent}}
 .kpi.good{{border-top-color:#2e7d46; background:#eaf4ed}}
 .kpi.warn{{border-top-color:#b67514; background:#f8f0e1}}
 .kpi.bad{{border-top-color:#c0392b; background:#f9eae7}}
@@ -393,7 +410,7 @@ h1 .of{{color:#9aa39c; font-weight:600}}
 .ks{{font-size:.72rem; color:#8a938c; margin-top:2px}}
 
 .card{{background:#ffffff; border:1px solid #e0e5e0; border-radius:16px;
-  padding:clamp(16px,3vw,24px); margin-top:14px; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 12px 28px -18px rgba(22,33,29,.24)}}
+  padding:22px; margin-top:14px; box-shadow:0 1px 2px rgba(22,33,29,.05), 0 12px 28px -18px rgba(22,33,29,.24)}}
 .h2{{font-family:"Barlow Condensed",sans-serif; font-weight:700; font-size:1.4rem;
   margin:0 0 12px; display:flex; align-items:baseline; gap:10px}}
 .h2 .tagline{{font-family:"Barlow Condensed",sans-serif; font-size:.72rem;
@@ -463,6 +480,17 @@ ul.rec li::marker{{color:#157a6e}}
 .legend i{{display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px}}
 
 footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line-height:1.6}}
+
+/* Responsive : amélioration progressive. La base en valeurs fixes reste
+   email-safe si le client ignore la media query (cas de Gmail). */
+@media (max-width:600px){{
+  .wrap{{padding:18px 14px}}
+  .hero{{padding:18px}}
+  h1{{font-size:2.1rem}}
+  .card{{padding:16px}}
+  .kpi{{display:block; width:100%}}
+  .kpi-empty{{display:none}}
+}}
 </style>
 </head>
 <body>
@@ -473,7 +501,8 @@ footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line
     <p class="sub"><span class="ph">{phase}</span>{note}</p>
 
     <div class="progress">
-      <div class="ptrow"><span class="pt">Progression du plan</span><span class="pt">{pct}%</span></div>
+      <table class="ptrow" cellpadding="0" cellspacing="0" role="presentation"><tbody><tr>
+        <td class="pt">Progression du plan</td><td class="pt" align="right">{pct}%</td></tr></tbody></table>
       <div class="track"><div class="fill" style="width:{pct}%"></div></div>
     </div>
     <div class="meta">
@@ -482,7 +511,7 @@ footer{{margin-top:20px; text-align:center; color:#8a938c; font-size:.8rem; line
     </div>
   </div>
 
-  <div class="kpis">{kpis}</div>
+  {kpis}
 
   <section class="card">
     <div class="h2">Ta semaine</div>
