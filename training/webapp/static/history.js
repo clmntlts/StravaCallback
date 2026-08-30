@@ -43,7 +43,7 @@ function historyRender() {
       <button type="button" id="hist-refresh" class="btn btn-secondary" ${historyState.loading ? "disabled" : ""}>
         ${historyState.loading ? "Actualisation…" : "Actualiser depuis Strava"}
       </button>
-      <button type="button" id="hist-table-toggle" class="btn btn-secondary">
+      <button type="button" id="hist-table-toggle" class="btn btn-ghost">
         ${historyState.showTable ? "Voir les graphiques" : "Voir en tableau"}
       </button>
     </div>`;
@@ -58,40 +58,53 @@ function historyRender() {
   }
 
   const d = historyState.data;
-  if (!d || !d.weekly.length || !d.totals.activities) {
+  const totals = d && d.totals;
+  const weekly = d && d.weekly;
+  if (!d || !Array.isArray(weekly) || !weekly.length || !totals || !totals.activities) {
     el.innerHTML = toolbar +
       '<div class="banner muted">Aucune activité Strava sur les 12 derniers mois.</div>';
     wireHistoryToolbar();
     return;
   }
 
-  const kpis = `
-    <div class="kpis">
-      <div class="kpi"><div class="kn">${d.totals.hours.toFixed(0)} h</div><div class="kl">Volume (12 mois)</div></div>
-      <div class="kpi"><div class="kn">${d.totals.km.toFixed(0)} km</div><div class="kl">Distance</div></div>
-      <div class="kpi"><div class="kn">${d.totals.elevation_m.toFixed(0)} m</div><div class="kl">Dénivelé cumulé</div></div>
-      <div class="kpi"><div class="kn">${d.totals.activities}</div><div class="kl">Activités</div></div>
-    </div>`;
+  // Une charge utile partielle/malformée doit dégrader vers un état vide plutôt
+  // que de casser le rendu (promesse rejetée non gérée) — d'où num() + try/catch.
+  const num = (v, dec) => (typeof v === "number" && isFinite(v) ? v.toFixed(dec) : "—");
+  const daily = Array.isArray(d.daily) ? d.daily : [];
 
-  const body = historyState.showTable ? historyTable(d.weekly) : `
-    <div class="card">
-      <h2>Volume hebdomadaire</h2>
-      ${buildBarChart(d.weekly)}
-    </div>
-    <div class="card">
-      <h2>Régularité — 12 derniers mois</h2>
-      ${buildHeatmap(d.daily)}
-    </div>
-    <div class="card">
-      <h2>Dénivelé cumulé</h2>
-      ${buildLineChart(d.weekly, "elevation_cumulative_m", { unit: "m", color: "var(--accent)" })}
-    </div>
-    ${historyHrCard(d.weekly)}
-  `;
+  try {
+    const kpis = `
+      <div class="kpis">
+        <div class="kpi"><div class="kn">${num(totals.hours, 0)} h</div><div class="kl">Volume (12 mois)</div></div>
+        <div class="kpi"><div class="kn">${num(totals.km, 0)} km</div><div class="kl">Distance</div></div>
+        <div class="kpi"><div class="kn">${num(totals.elevation_m, 0)} m</div><div class="kl">Dénivelé cumulé</div></div>
+        <div class="kpi"><div class="kn">${esc(totals.activities)}</div><div class="kl">Activités</div></div>
+      </div>`;
 
-  el.innerHTML = toolbar + kpis + body;
-  wireHistoryToolbar();
-  wireHistoryInteractions(d);
+    const body = historyState.showTable ? historyTable(weekly) : `
+      <div class="card">
+        <h2>Volume hebdomadaire</h2>
+        ${buildBarChart(weekly)}
+      </div>
+      <div class="card">
+        <h2>Régularité — 12 derniers mois</h2>
+        ${buildHeatmap(daily)}
+      </div>
+      <div class="card">
+        <h2>Dénivelé cumulé</h2>
+        ${buildLineChart(weekly, "elevation_cumulative_m", { unit: "m", color: "var(--accent)", title: "Dénivelé cumulé" })}
+      </div>
+      ${historyHrCard(weekly)}
+    `;
+
+    el.innerHTML = toolbar + kpis + body;
+    wireHistoryToolbar();
+    wireHistoryInteractions(d);
+  } catch (e) {
+    el.innerHTML = toolbar +
+      '<div class="banner muted">Données d\'historique incomplètes ou invalides.</div>';
+    wireHistoryToolbar();
+  }
 }
 
 function historyHrCard(weekly) {
@@ -100,7 +113,7 @@ function historyHrCard(weekly) {
       <p class="tip">Pas de FC moyenne dans tes activités Strava sur cette période.</p></div>`;
   }
   return `<div class="card"><h2>Fréquence cardiaque moyenne</h2>
-    ${buildLineChart(weekly, "avg_hr", { unit: "bpm", color: "var(--accent-dark)", area: false })}</div>`;
+    ${buildLineChart(weekly, "avg_hr", { unit: "bpm", color: "var(--accent-dark)", area: false, title: "Fréquence cardiaque moyenne" })}</div>`;
 }
 
 function historyTable(weekly) {
@@ -115,12 +128,14 @@ function historyTable(weekly) {
   return `
     <div class="card">
       <h2>Détail hebdomadaire</h2>
-      <table>
-        <thead><tr><th>Semaine</th><th style="text-align:right">Volume</th>
-          <th style="text-align:right">Distance</th><th style="text-align:right">D+</th>
-          <th style="text-align:right">FC moy.</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Semaine</th><th class="n">Volume</th>
+            <th class="n">Distance</th><th class="n">D+</th>
+            <th class="n">FC moy.</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -148,7 +163,8 @@ function buildBarChart(weekly) {
   const maxH = niceMax(Math.max(...weekly.map((w) => w.hours), 1));
   const bars = weekly.map((w, i) => {
     const pct = Math.max(1, (w.hours / maxH) * 100);
-    return `<div class="hist-bar" data-idx="${i}" tabindex="0" style="height:${pct}%"></div>`;
+    const label = `Semaine du ${w.week_start} : ${w.hours.toFixed(1)} h, ${w.km.toFixed(1)} km`;
+    return `<div class="hist-bar" data-idx="${i}" tabindex="0" role="img" aria-label="${esc(label)}" style="height:${pct}%"></div>`;
   }).join("");
   return `
     <div class="hist-bars-wrap">
@@ -199,10 +215,11 @@ function buildHeatmap(daily) {
   }).join("");
 
   const cols = weeks.map((wk) => {
-    const cells = wk.map((day) =>
-      `<div class="hist-cell hl-${levelOf(day.hours)}" tabindex="0"
-         data-date="${day.date}" data-hours="${day.hours}" data-km="${day.km}"></div>`
-    ).join("");
+    const cells = wk.map((day) => {
+      const label = `${day.date} : ${Number(day.hours).toFixed(1)} h, ${Number(day.km).toFixed(1)} km`;
+      return `<div class="hist-cell hl-${levelOf(day.hours)}" tabindex="0" role="img" aria-label="${esc(label)}"
+         data-date="${day.date}" data-hours="${day.hours}" data-km="${day.km}"></div>`;
+    }).join("");
     return `<div class="hist-col">${cells}</div>`;
   }).join("");
 
@@ -268,12 +285,18 @@ function buildLineChart(weekly, field, opts) {
             <text class="hist-axis-label" x="${PAD_L - 6}" y="${yy + 3}" text-anchor="end">${val.toFixed(0)}</text>`;
   }).join("");
 
-  const hitAreas = weekly.map((w, i) => `<rect class="hist-hit" tabindex="0" data-idx="${i}"
-    x="${(x(i) - bandW / 2).toFixed(1)}" y="0" width="${bandW.toFixed(1)}" height="${H}" fill="transparent" />`
-  ).join("");
+  const hitAreas = weekly.map((w, i) => {
+    const aria = w[field] != null
+      ? ` aria-label="${esc(`Semaine du ${w.week_start} : ${w[field].toFixed(0)} ${opts.unit}`)}"` : "";
+    return `<rect class="hist-hit" tabindex="0" data-idx="${i}"${aria}
+      x="${(x(i) - bandW / 2).toFixed(1)}" y="0" width="${bandW.toFixed(1)}" height="${H}" fill="transparent" />`;
+  }).join("");
+
+  const svgTitle = opts.title ? `${opts.title}, ${opts.unit}` : opts.unit;
 
   return `
-    <svg class="hist-linechart" viewBox="0 0 ${W} ${H}" data-field="${field}" data-unit="${esc(opts.unit)}">
+    <svg class="hist-linechart" viewBox="0 0 ${W} ${H}" data-field="${field}" data-unit="${esc(opts.unit)}" role="img">
+      <title>${esc(svgTitle)}</title>
       ${gridlines}
       ${areaPaths}
       ${linePaths}
@@ -316,8 +339,20 @@ function showHistTooltip(evt, titleText, rows) {
     el.appendChild(row);
   });
   el.style.display = "block";
-  const x = (evt.clientX || 0) + 14;
-  const y = (evt.clientY || 0) + 14;
+  // Sur un focus clavier, clientX/clientY valent 0 : on se replie sur le centre
+  // du rectangle de l'élément focalisé au lieu de coller le tooltip en haut à gauche.
+  let px = evt.clientX;
+  let py = evt.clientY;
+  if (evt.type === "focus" || (!px && !py)) {
+    const target = evt.currentTarget || evt.target;
+    if (target && target.getBoundingClientRect) {
+      const rect = target.getBoundingClientRect();
+      px = rect.left + rect.width / 2;
+      py = rect.top + rect.height / 2;
+    }
+  }
+  const x = (px || 0) + 14;
+  const y = (py || 0) + 14;
   el.style.left = Math.min(x, window.innerWidth - el.offsetWidth - 10) + "px";
   el.style.top = Math.min(y, window.innerHeight - el.offsetHeight - 10) + "px";
 }

@@ -15,7 +15,10 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import threading
 from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # training/
 if HERE not in sys.path:
@@ -42,6 +45,25 @@ _week_cache: dict = {}
 # (?refresh=1), jamais automatiquement (évite un appel Strava par tab-switch).
 _history_cache: dict = {}
 
+# Verrou partagé protégeant les deux caches process-local. Serveur mono-
+# utilisateur : un seul verrou global (lectures/écritures/vidages) suffit,
+# inutile d'en avoir un par cache.
+_cache_lock = threading.Lock()
+
+# Garde anti-DNS-rebinding : le chat onboarding shelle out un outil Bash au
+# niveau du repo, une page « rebound » en same-origin pourrait le piloter par
+# prompt injection. On borne donc l'hôte/l'origine au local (cf. #48).
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
+
+
+def _host_part(netloc: str) -> str:
+    """Isole l'hôte d'un `host:port` (gère l'IPv6 littéral entre crochets,
+    ex. `[::1]:5000` → `::1`)."""
+    netloc = netloc.strip()
+    if netloc.startswith("["):
+        return netloc[1:netloc.index("]")] if "]" in netloc else netloc[1:]
+    return netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
+
 
 def _reload_engine() -> None:
     """Recharge la chaîne config → workouts → coach → program après une
@@ -56,10 +78,11 @@ def _reload_engine() -> None:
     """
     for mod in (config, workouts, coach, program):
         importlib.reload(mod)
-    _week_cache.clear()
+    with _cache_lock:
+        _week_cache.clear()
 
 
-def _load_live_activities(days_back: int = None):
+def _load_live_activities(days_back: Optional[int] = None):
     """Best-effort : (activités, erreur). N'appelle jamais SystemExit (une
     route Flask ne doit jamais laisser fuiter une BaseException) — un échec
     Strava dégrade en `acts=None` (plan macro sans réalisé), pas en 500.
@@ -90,6 +113,20 @@ def _files_for_week(res) -> dict:
 def create_app() -> "Flask":
     app = Flask(__name__, static_folder=None)
 
+    @app.before_request
+    def _guard_local_only():
+        """Rejette en 403 toute requête dont l'hôte n'est pas local, ou dont
+        l'`Origin` (quand présente) n'est pas un `http://127.0.0.1|localhost`
+        — parade DNS-rebinding pour le shell d'onboarding (#48). Une requête
+        sans `Origin` (GET same-origin) est autorisée."""
+        if _host_part(request.headers.get("Host", "")) not in _ALLOWED_HOSTS:
+            return jsonify({"error": "hôte non autorisé (local uniquement)"}), 403
+        origin = request.headers.get("Origin")
+        if origin:
+            parsed = urlparse(origin)
+            if parsed.scheme != "http" or _host_part(parsed.netloc) not in _ALLOWED_HOSTS:
+                return jsonify({"error": "origine non autorisée (local uniquement)"}), 403
+
     @app.get("/")
     def index():
         return send_from_directory(STATIC_DIR, "index.html")
@@ -116,7 +153,8 @@ def create_app() -> "Flask":
         if request.args.get("live") == "1":
             acts, strava_error = _load_live_activities()
         res, last, actuals, analysis = generate._prepare_week(idx, acts, today)
-        _week_cache[idx] = res
+        with _cache_lock:
+            _week_cache[idx] = res
         data = report.week_report_json(res, last, _files_for_week(res), analysis)
         data["actuals"] = actuals
         data["strava_error"] = strava_error
@@ -127,22 +165,24 @@ def create_app() -> "Flask":
         """Fenêtre glissante de 12 mois (alignée sur un lundi pour la grille
         heatmap), mise en cache process-local — un appel Strava par process
         tant que `?refresh=1` n'est pas demandé, pas un par tab-switch."""
-        if request.args.get("refresh") == "1":
-            _history_cache.clear()
-        if "data" not in _history_cache:
-            today = date.today()
-            end = today + timedelta(days=1)
-            raw_start = today - timedelta(days=365)
-            start = raw_start - timedelta(days=raw_start.weekday())
-            acts, strava_error = _load_live_activities(days_back=(end - start).days)
-            if acts is None:
-                return jsonify({"error": strava_error})
-            _history_cache["data"] = strava.history_json(acts, start, end)
-        return jsonify(_history_cache["data"])
+        with _cache_lock:
+            if request.args.get("refresh") == "1":
+                _history_cache.clear()
+            if "data" not in _history_cache:
+                today = date.today()
+                end = today + timedelta(days=1)
+                raw_start = today - timedelta(days=365)
+                start = raw_start - timedelta(days=raw_start.weekday())
+                acts, strava_error = _load_live_activities(days_back=(end - start).days)
+                if acts is None:
+                    return jsonify({"error": strava_error}), 502
+                _history_cache["data"] = strava.history_json(acts, start, end)
+            return jsonify(_history_cache["data"])
 
     @app.get("/api/week/<int:idx>/fit/<role>")
     def api_week_fit(idx, role):
-        res = _week_cache.get(idx)
+        with _cache_lock:
+            res = _week_cache.get(idx)
         if res is None:
             return jsonify({"error": "charge d'abord la semaine "
                                      "(GET /api/week/<idx>)"}), 409
@@ -156,7 +196,8 @@ def create_app() -> "Flask":
 
     @app.post("/api/week/<int:idx>/push-garmin")
     def api_week_push_garmin(idx):
-        res = _week_cache.get(idx)
+        with _cache_lock:
+            res = _week_cache.get(idx)
         if res is None:
             return jsonify({"error": "charge d'abord la semaine "
                                      "(GET /api/week/<idx>)"}), 409
@@ -166,8 +207,11 @@ def create_app() -> "Flask":
     def api_chat():
         body = request.get_json(silent=True) or {}
         messages = body.get("messages")
-        if not messages:
-            return jsonify({"error": "messages manquant ou vide"}), 400
+        if (not isinstance(messages, list) or not messages
+                or not all(isinstance(m, dict) and "role" in m and "content" in m
+                           for m in messages)):
+            return jsonify({"error": "messages doit être une liste non vide "
+                                     "de {role, content}"}), 400
 
         if body.get("mode") == "onboarding":
             try:
@@ -185,12 +229,24 @@ def create_app() -> "Flask":
                 _reload_engine()
             return jsonify({"reply": reply, "onboarded": onboarded})
 
-        idx = body.get("week_idx") or program.target_week_index(date.today())
+        # `week_idx` explicite : on le coerce en int (une valeur non entière →
+        # 400, pas un 500). Absent → semaine courante. NB : ne PAS utiliser
+        # `body.get(...) or default`, qui transformerait un 0/négatif explicite
+        # en défaut au lieu de le valider comme hors-programme.
+        raw_idx = body.get("week_idx")
+        if raw_idx is None:
+            idx = program.target_week_index(date.today())
+        else:
+            try:
+                idx = int(raw_idx)
+            except (TypeError, ValueError):
+                return jsonify({"error": "week_idx invalide (entier attendu)"}), 400
         if not (1 <= idx <= program.N_WEEKS):
             return jsonify({"error": f"semaine {idx} hors programme "
                                      f"(1..{program.N_WEEKS})"}), 404
         res, last, actuals, analysis = generate._prepare_week(idx, None, date.today())
-        _week_cache[idx] = res
+        with _cache_lock:
+            _week_cache[idx] = res
         week_json = report.week_report_json(res, last, _files_for_week(res), analysis)
         system_prompt = chat.assemble_system_prompt(
             week_json, report.plan_meta_json(), config.summary())

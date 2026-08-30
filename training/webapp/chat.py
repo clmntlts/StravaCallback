@@ -20,10 +20,12 @@ par `--tools` (la liste d'outils réellement disponibles) :
 Pas de `--dangerously-skip-permissions` : vérifié empiriquement qu'en mode
 headless (`-p`), Claude Code n'attend de toute façon aucune confirmation
 humaine pour les outils listés dans `--tools` (il n'y a personne pour
-répondre à un prompt) — `--permission-mode`/`--allowedTools` n'ont montré
-aucun effet observable non plus dans ce mode lors des tests. La seule
-frontière de confiance qui compte réellement est donc le choix des outils
-exposés via `--tools`, pas un flag de bypass.
+répondre à un prompt). La frontière de confiance qui compte réellement
+reste le choix des outils exposés via `--tools`, pas un flag de bypass —
+mais l'onboarding passe DÉSORMAIS aussi `--permission-mode default` et
+`--allowedTools` (bornés au shell) en DÉFENSE EN PROFONDEUR : ces flags
+n'avaient montré aucun effet observable dans ce mode lors des tests, on ne
+s'y fie donc pas, on les ajoute par prudence sans retirer la borne `--tools`.
 """
 
 from __future__ import annotations
@@ -115,7 +117,7 @@ def _render_transcript(messages: list) -> str:
 
 
 def _run_claude(system_prompt: str, prompt: str, tools: str, timeout_s: int,
-                 cwd: str = None) -> str:
+                 cwd: str = None, extra_args: list = None) -> str:
     """Cœur partagé Q&A/onboarding : un appel `claude -p` headless, sans état.
     Ne lève jamais d'exception : une panne du CLI dégrade en message lisible
     plutôt qu'en 500 côté route Flask (même posture que
@@ -125,6 +127,10 @@ def _run_claude(system_prompt: str, prompt: str, tools: str, timeout_s: int,
     # — shutil.which résout l'extension (PATHEXT) et est un no-op sur POSIX.
     binary = shutil.which(CLAUDE_BIN) or CLAUDE_BIN
     cmd = [binary, "-p", "--append-system-prompt", system_prompt, "--tools", tools]
+    # `--tools` reste directement suivi de sa valeur (des tests s'appuient
+    # dessus) : les flags défensifs éventuels sont ajoutés APRÈS.
+    if extra_args:
+        cmd += extra_args
     try:
         proc = subprocess.run(
             cmd, input=prompt, capture_output=True, text=True,
@@ -154,13 +160,20 @@ def run_onboarding_turn(messages: list, system_prompt: str) -> str:
     Edit/Write/WebFetch/etc. PAS de `--dangerously-skip-permissions` :
     vérifié que `-p` n'attend aucune confirmation humaine pour les outils
     listés dans `--tools` (personne pour répondre à un prompt en headless).
-    La frontière de confiance réelle est donc `--tools` seul — pas un flag
+    La frontière de confiance réelle reste donc `--tools` seul — pas un flag
     de bypass — épaulé par le prompt système qui borne son usage à la seule
-    commande d'onboarding. `cwd` = racine du repo pour que la commande
-    documentée (`python3 training/generate.py onboard ...`) et le
-    chargement de `.claude/` restent cohérents avec l'onboarding interactif
-    (cf. `.claude/hooks/session-start.sh`)."""
+    commande d'onboarding. En DÉFENSE EN PROFONDEUR on passe aussi
+    `--permission-mode default` (le mode le plus restrictif qui laisse encore
+    la commande s'exécuter) et `--allowedTools` borné au même shell : ces
+    flags n'avaient montré aucun effet observable en headless, on ne s'y fie
+    donc pas, mais on les ajoute par prudence sans toucher à la borne
+    `--tools`. `cwd` = racine du repo pour que la commande documentée
+    (`python3 training/generate.py onboard ...`) et le chargement de
+    `.claude/` restent cohérents avec l'onboarding interactif (cf.
+    `.claude/hooks/session-start.sh`)."""
     return _run_claude(
         system_prompt, _render_transcript(messages), tools="Bash,PowerShell",
         timeout_s=ONBOARD_TIMEOUT_S, cwd=REPO_ROOT,
+        extra_args=["--permission-mode", "default",
+                    "--allowedTools", "Bash,PowerShell"],
     )

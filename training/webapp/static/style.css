@@ -1,12 +1,17 @@
 :root{
-  --bg:#eef1ee; --ink:#16211d; --muted:#5c6660; --faint:#8a938c;
+  color-scheme: light;
+  --bg:#eef1ee; --ink:#16211d; --muted:#5c6660; --faint:#6b746e;
   --surface:#ffffff; --border:#e0e5e0;
   --accent:#157a6e; --accent-dark:#0e5c53; --accent-bg:#e7f1ee; --accent-bg2:#f6faf9;
   --good:#2e7d46; --good-bg:#eaf4ed;
-  --warn:#b67514; --warn-bg:#f8f0e1;
+  --warn:#b67514; --warn-bg:#f8f0e1; --warn-ink:#8a5a0e;
   --bad:#c0392b; --bad-bg:#f9eae7;
   --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* Échelle d'espacement */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
+  /* Échelle typographique (tailles partagées, collapse des quasi-doublons) */
+  --text-xs:.72rem; --text-sm:.85rem; --text-md:.9rem; --text-lg:1.05rem; --text-xl:1.35rem;
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
@@ -17,30 +22,31 @@ a{color:var(--accent-dark)}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
 
 header.hero{background:var(--surface); border:1px solid var(--border); border-radius:18px;
-  padding:20px 24px; margin-bottom:22px; display:flex; align-items:center;
-  justify-content:space-between; gap:16px; flex-wrap:wrap}
+  padding:var(--space-5); margin-bottom:var(--space-5); display:flex; align-items:center;
+  justify-content:space-between; gap:var(--space-4); flex-wrap:wrap;
+  box-shadow:0 1px 2px rgba(22,33,29,.05), 0 16px 32px -22px rgba(22,33,29,.3)}
 header.hero h1{margin:0; font-size:1.45rem; letter-spacing:-.01em}
-header.hero .sub{color:var(--muted); font-size:.9rem; margin-top:4px}
-.pill{display:inline-flex; align-items:center; gap:6px; font-size:.82rem;
+header.hero .sub{color:var(--muted); font-size:var(--text-md); margin-top:4px}
+.pill{display:inline-flex; align-items:center; gap:6px; font-size:var(--text-sm);
   padding:5px 13px; border-radius:999px; background:var(--accent-bg);
   border:1px solid #cfe5df; color:var(--accent-dark); font-weight:600}
 
-nav.tabs{display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap}
-nav.tabs button{font:inherit; font-weight:600; font-size:.88rem; padding:9px 18px;
+nav.tabs{display:flex; gap:6px; margin-bottom:var(--space-5); flex-wrap:wrap}
+nav.tabs button{font:inherit; font-weight:600; font-size:var(--text-sm); padding:9px 18px;
   border-radius:10px; border:1px solid var(--border); background:var(--surface);
   color:var(--muted); cursor:pointer; transition:background-color .15s, border-color .15s, color .15s}
 nav.tabs button:hover:not(.active){background:var(--accent-bg2); color:var(--ink); border-color:#d8e8e4}
 nav.tabs button.active{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff}
 
 .card{background:var(--surface); border:1px solid var(--border); border-radius:16px;
-  padding:20px 22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(22,33,29,.05),
+  padding:var(--space-5); margin-bottom:var(--space-4); box-shadow:0 1px 2px rgba(22,33,29,.05),
   0 16px 32px -22px rgba(22,33,29,.3)}
-.card h2{margin:0 0 14px; font-size:1.05rem; letter-spacing:-.005em}
+.card h2{margin:0 0 14px; font-size:var(--text-lg); letter-spacing:-.005em}
 
 /* Système de boutons -------------------------------------------------- */
 button{font:inherit}
-.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px;
-  font-weight:600; font-size:.85rem; white-space:nowrap; padding:9px 16px;
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2);
+  font-weight:600; font-size:var(--text-sm); white-space:nowrap; padding:var(--space-2) var(--space-4);
   border-radius:10px; border:1px solid transparent; cursor:pointer;
   transition:background-color .15s, border-color .15s, color .15s, transform .05s}
 .btn:disabled{opacity:.5; cursor:default}
@@ -49,9 +55,30 @@ button{font:inherit}
 .btn-primary:hover:not(:disabled){background:#0a4a43}
 .btn-secondary{background:var(--accent-bg); border-color:#cfe5df; color:var(--accent-dark)}
 .btn-secondary:hover:not(:disabled){background:#dcece6}
+/* Troisième tier bas-relief pour les bascules de vue */
+.btn-ghost{background:transparent; border-color:transparent; color:var(--muted)}
+.btn-ghost:hover:not(:disabled){background:var(--accent-bg2); color:var(--ink)}
 .btn-icon{width:36px; height:36px; padding:0; border-radius:10px; font-weight:700;
   background:var(--surface); border-color:var(--border); color:var(--ink)}
 .btn-icon:hover:not(:disabled){background:var(--bg); border-color:#c7ccc6}
+
+/* Utilitaires partagés ------------------------------------------------- */
+.ml-auto{margin-left:auto}
+.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+.table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
+th.n{text-align:right}
+/* Badges d'état pour les résultats de push (JS ajoute aria-hidden + .sr-only) */
+.status-ok,.status-ko{display:inline-block; width:14px; height:14px; border-radius:50%;
+  position:relative; vertical-align:middle; flex:none}
+.status-ok{background:var(--good)}
+.status-ko{background:var(--bad)}
+.status-ok::after{content:""; position:absolute; left:4px; top:2px; width:4px; height:7px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg)}
+.status-ko::before,.status-ko::after{content:""; position:absolute; left:6px; top:3px;
+  width:2px; height:8px; background:#fff; border-radius:1px}
+.status-ko::before{transform:rotate(45deg)}
+.status-ko::after{transform:rotate(-45deg)}
 
 /* Petit badge d'état (décharge…) — jamais la couleur seule : toujours un
    libellé texte accompagne ou précède ce point dans la vue elle-même. */
@@ -61,38 +88,43 @@ button{font:inherit}
 .week-nav{display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap}
 .week-nav select{font:inherit; padding:8px 12px; border-radius:10px; border:1px solid var(--border);
   background:var(--surface); color:var(--ink)}
-.week-nav .btn-secondary{margin-left:auto}
 
-.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:18px}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:var(--space-3); margin-bottom:var(--space-4)}
 .kpi{background:var(--surface); border:1px solid var(--border); border-radius:14px;
-  padding:13px 15px; border-top:3px solid #dfe4df; transition:box-shadow .15s}
+  padding:var(--space-3) var(--space-4); border-top:3px solid #dfe4df}
 .kpi.good{border-top-color:var(--good); background:var(--good-bg)}
 .kpi.warn{border-top-color:var(--warn); background:var(--warn-bg)}
 .kpi.bad{border-top-color:var(--bad); background:var(--bad-bg)}
-.kpi .kn{font-family:var(--mono); font-size:1.35rem; font-weight:700}
+.kpi .kn{font-family:var(--mono); font-size:var(--text-xl); font-weight:700}
 .kpi .kl{font-size:.78rem; color:var(--muted); margin-top:3px; font-weight:600}
 
 table{width:100%; border-collapse:collapse}
-td,th{padding:11px 8px; border-bottom:1px solid var(--bg); vertical-align:middle; text-align:left}
-th{font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); padding-top:0}
+td,th{padding:11px 8px; border-bottom:1px solid var(--border); vertical-align:middle; text-align:left}
+th{font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--faint); padding-top:0}
 tbody tr{transition:background-color .1s}
 tbody tr:hover{background:var(--accent-bg2)}
 td.n{text-align:right; font-family:var(--mono); color:var(--accent-dark)}
-.role{font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint)}
-.tip{font-size:.82rem; color:var(--muted); margin-top:2px}
+.role{font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--faint)}
+.tip{font-size:var(--text-sm); color:var(--muted); margin-top:2px}
 a.dl{font-size:.78rem; font-weight:700; color:var(--accent-dark); text-decoration:none;
   background:var(--accent-bg2); border:1px solid #d8e8e4; border-radius:999px;
   padding:4px 10px; white-space:nowrap}
 a.dl:hover{background:var(--accent-bg)}
 
 ul.adj{margin:0; padding-left:18px}
-ul.adj li{margin:.3em 0; font-size:.9rem}
-.deload-tag{text-transform:uppercase; font-size:.68rem; font-weight:700; color:var(--warn);
+ul.adj li{margin:.3em 0; font-size:var(--text-md)}
+.deload-tag{text-transform:uppercase; font-size:var(--text-xs); font-weight:700; color:var(--warn-ink);
   background:var(--warn-bg); border:1px solid #ecdcbd; border-radius:999px; padding:2px 9px}
 
-.banner{border-radius:12px; padding:11px 15px; font-size:.86rem; margin-bottom:14px}
-.banner.warn{background:var(--warn-bg); color:#8a5a0e; border:1px solid #ecdcbd}
+.banner{border-radius:12px; padding:11px 15px; font-size:var(--text-sm); margin-bottom:14px}
+.banner.warn{background:var(--warn-bg); color:var(--warn-ink); border:1px solid #ecdcbd}
 .banner.muted{background:var(--bg); color:var(--muted); border:1px solid var(--border)}
+/* Bannière d'accueil première visite (profil non configuré) : accent tinté
+   pour attirer l'œil vers le CTA « Configurer mon profil ». */
+.banner.onboarding{background:var(--accent-bg); color:var(--accent-dark);
+  border:1px solid #cfe5df; display:flex; align-items:center; gap:12px;
+  flex-wrap:wrap; justify-content:space-between}
+.banner.onboarding .btn{margin-left:auto}
 
 .muted-inline{color:var(--muted)}
 .subhead{margin-top:18px}
@@ -100,14 +132,14 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .mt-3{margin-top:12px}
 .mt-2{margin-top:6px}
 
-.plan-table td, .plan-table th{font-size:.85rem}
+.plan-table td, .plan-table th{font-size:var(--text-sm)}
 .plan-table td.wk{font-family:var(--mono); color:var(--faint); width:40px}
 .plan-table td.wk .dot{margin-left:6px}
 .plan-table tr.current{background:var(--accent-bg2)}
 .legend{display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--muted);
   margin:-4px 0 12px}
 
-.loading{color:var(--faint); font-size:.9rem; padding:20px 0; text-align:center}
+.loading{color:var(--faint); font-size:var(--text-md); padding:20px 0; text-align:center}
 
 .chat-card{display:flex; flex-direction:column}
 .chat-log{display:flex; flex-direction:column; gap:10px; max-height:52vh;
@@ -115,13 +147,17 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .chat-msg{display:flex}
 .chat-msg.assistant{justify-content:flex-start}
 .chat-msg.user{justify-content:flex-end}
-.chat-bubble{max-width:80%; padding:9px 13px; border-radius:14px; font-size:.9rem;
+.chat-bubble{max-width:80%; padding:9px 13px; border-radius:14px; font-size:var(--text-md);
   line-height:1.4; white-space:pre-wrap}
 .chat-msg.assistant .chat-bubble{background:var(--accent-bg2); border:1px solid #d8e8e4;
   color:var(--ink); border-bottom-left-radius:4px}
 .chat-msg.user .chat-bubble{background:var(--accent-dark); color:#fff;
   border-bottom-right-radius:4px}
 .chat-bubble.loading{color:var(--faint); background:var(--bg); border:1px solid var(--border)}
+.chat-elapsed{color:var(--faint); font-size:var(--text-xs); font-variant-numeric:tabular-nums}
+/* Variante erreur d'une bulle assistant (palette warn) */
+.chat-msg.assistant .chat-bubble.error{background:var(--warn-bg); border-color:#ecdcbd;
+  color:var(--warn-ink)}
 .chat-form{display:flex; gap:8px}
 .chat-form input{flex:1; font:inherit; padding:9px 12px; border-radius:10px;
   border:1px solid var(--border); background:var(--surface); color:var(--ink)}
@@ -175,7 +211,7 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .hist-endlabel{font-size:11px; fill:var(--ink); font-weight:600; font-family:var(--mono)}
 .hist-crosshair{stroke:var(--faint); stroke-width:1; stroke-dasharray:2 2}
 .hist-hit{cursor:crosshair}
-.hist-hit:focus-visible{outline:none}
+.hist-hit:focus-visible{outline:2px solid var(--accent-dark); outline-offset:0}
 
 /* Tooltip partagé (positionné en JS, ancré à document.body) */
 .hist-tooltip{position:fixed; z-index:50; background:var(--ink); color:#fff;
@@ -184,3 +220,9 @@ ul.adj li{margin:.3em 0; font-size:.9rem}
 .hist-tooltip-title{font-weight:700; margin-bottom:3px; font-size:.75rem;
   color:rgba(255,255,255,.7); text-transform:uppercase; letter-spacing:.03em}
 .hist-tooltip-row strong{font-family:var(--mono)}
+
+/* Respect de prefers-reduced-motion : neutralise transitions/animations */
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:0.01ms !important; animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important; scroll-behavior:auto !important}
+}

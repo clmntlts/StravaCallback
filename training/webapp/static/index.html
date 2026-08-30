@@ -16,17 +16,17 @@
     <span class="pill" id="hero-pill"></span>
   </header>
 
-  <nav class="tabs">
-    <button id="tab-week" class="active">Semaine</button>
-    <button id="tab-plan">Plan complet</button>
-    <button id="tab-history">Historique</button>
-    <button id="tab-chat">Coach (chat)</button>
+  <nav class="tabs" role="tablist" aria-label="Vues">
+    <button id="tab-week" class="active" role="tab" aria-controls="view-week" aria-selected="true" tabindex="0">Semaine</button>
+    <button id="tab-plan" role="tab" aria-controls="view-plan" aria-selected="false" tabindex="-1">Plan complet</button>
+    <button id="tab-history" role="tab" aria-controls="view-history" aria-selected="false" tabindex="-1">Historique</button>
+    <button id="tab-chat" role="tab" aria-controls="view-chat" aria-selected="false" tabindex="-1">Coach (chat)</button>
   </nav>
 
-  <section id="view-week"></section>
-  <section id="view-plan" style="display:none"></section>
-  <section id="view-history" style="display:none"></section>
-  <section id="view-chat" style="display:none"></section>
+  <section id="view-week" role="tabpanel" aria-labelledby="tab-week" tabindex="0"></section>
+  <section id="view-plan" role="tabpanel" aria-labelledby="tab-plan" tabindex="0" style="display:none"></section>
+  <section id="view-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0" style="display:none"></section>
+  <section id="view-chat" role="tabpanel" aria-labelledby="tab-chat" tabindex="0" style="display:none"></section>
 </div>
 <script src="/app.js"></script>
 <script src="/history.js"></script>

@@ -196,10 +196,11 @@ class TestHistoryRoute(unittest.TestCase):
         self.assertEqual(mock_load.call_count, 2)
 
     @patch("webapp.server._load_live_activities")
-    def test_strava_error_surfaces_without_500(self, mock_load):
+    def test_strava_error_surfaces_as_502(self, mock_load):
+        # Échec amont Strava : 502 (pas un 200, pas un 500 qui fuiterait).
         mock_load.return_value = (None, "Strava non configuré ou jeton invalide : boom")
         r = self.client.get("/api/history")
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 502)
         self.assertIn("boom", r.get_json()["error"])
 
 
@@ -320,6 +321,25 @@ class TestChatRoute(unittest.TestCase):
         })
         self.assertEqual(r.status_code, 404)
 
+    def test_non_int_week_idx_is_400(self):
+        r = self.client.post("/api/chat", json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "week_idx": "pas-un-entier",
+        })
+        self.assertEqual(r.status_code, 400)
+
+    def test_messages_not_a_list_is_400(self):
+        r = self.client.post("/api/chat", json={"messages": "coucou"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_messages_list_of_non_dicts_is_400(self):
+        r = self.client.post("/api/chat", json={"messages": ["coucou", "salut"]})
+        self.assertEqual(r.status_code, 400)
+
+    def test_messages_dicts_missing_keys_is_400(self):
+        r = self.client.post("/api/chat", json={"messages": [{"role": "user"}]})
+        self.assertEqual(r.status_code, 400)
+
     @patch("webapp.server.chat.run_chat_turn")
     def test_forwards_reply_and_defaults_week_to_current(self, mock_run_chat_turn):
         mock_run_chat_turn.return_value = "Tout va bien."
@@ -366,6 +386,48 @@ class TestChatRoute(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.get_json()["onboarded"])
         mock_reload.assert_not_called()
+
+
+@unittest.skipUnless(HAS_FLASK, "Flask non installé (training/requirements-web.txt)")
+class TestHostGuard(unittest.TestCase):
+    """Garde anti-DNS-rebinding (#48) : le shell d'onboarding n'est joignable
+    que via un hôte/une origine local(e)."""
+
+    def setUp(self):
+        from webapp import server
+        server._week_cache.clear()
+        self.client = server.create_app().test_client()
+
+    def test_foreign_host_rejected_403_on_chat(self):
+        r = self.client.post("/api/chat", headers={"Host": "evil.com"}, json={
+            "messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(r.status_code, 403)
+
+    def test_foreign_host_rejected_403_on_push_garmin(self):
+        r = self.client.post("/api/week/1/push-garmin", headers={"Host": "evil.com"})
+        self.assertEqual(r.status_code, 403)
+
+    def test_local_host_not_rejected(self):
+        # Host local admis : la requête traverse la garde et atteint la
+        # validation (messages manquant → 400), donc PAS un 403.
+        r = self.client.post("/api/chat", headers={"Host": "127.0.0.1:5000"}, json={})
+        self.assertNotEqual(r.status_code, 403)
+        self.assertEqual(r.status_code, 400)
+
+    def test_foreign_origin_rejected_403(self):
+        r = self.client.post("/api/chat",
+                             headers={"Host": "127.0.0.1:5000",
+                                      "Origin": "http://evil.com"},
+                             json={"messages": [{"role": "user", "content": "hi"}]})
+        self.assertEqual(r.status_code, 403)
+
+    def test_local_origin_not_rejected(self):
+        r = self.client.post("/api/chat",
+                             headers={"Host": "127.0.0.1:5000",
+                                      "Origin": "http://127.0.0.1:5000"},
+                             json={})
+        self.assertNotEqual(r.status_code, 403)
+        self.assertEqual(r.status_code, 400)
 
 
 if __name__ == "__main__":
