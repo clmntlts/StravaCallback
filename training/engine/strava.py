@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -63,7 +64,30 @@ def refresh_access_token(client_id=None, client_secret=None, refresh_token=None)
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     }).encode()
-    data = _http(STRAVA_TOKEN_URL, data=body, method="POST")
+    # Sans lire le corps, un refresh en échec ne rend qu'un « HTTP Error 400 »
+    # inutile — or c'est le mode de panne n°1 du run hebdo (#20). On décode le
+    # corps et on rend un 400 (refresh_token expiré/révoqué, cas dominant)
+    # actionnable. NB : Strava utilise son propre schéma d'erreur, sans le
+    # littéral `invalid_grant` — on se fie donc au code HTTP, pas au texte.
+    try:
+        data = _http(STRAVA_TOKEN_URL, data=body, method="POST")
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", "replace").strip()
+        except Exception:
+            detail = ""
+        if e.code == 400:
+            raise RuntimeError(
+                "Strava a rejeté le refresh du token (HTTP 400) — le "
+                "refresh_token est probablement expiré ou révoqué. Régénère-le "
+                "une fois : `python3 training/generate.py strava-auth-url` puis "
+                "`strava-auth-exchange` (voir training/RUNBOOK.md). "
+                f"Réponse Strava : {detail or '(vide)'}"
+            ) from e
+        raise RuntimeError(
+            f"Échec du refresh du token Strava (HTTP {e.code}) : "
+            f"{detail or e.reason}"
+        ) from e
     if "access_token" not in data:
         raise RuntimeError(f"Réponse Strava inattendue au refresh du token : {data}")
     # NB : Strava peut renvoyer un nouveau refresh_token (data['refresh_token']).

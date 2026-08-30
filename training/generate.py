@@ -84,7 +84,14 @@ WORKOUTS_DIR = os.path.join(HERE, "workouts")
 def _load_activities(args):
     today = datetime.strptime(args.today, "%Y-%m-%d").date() if args.today else None
     if args.activities:
-        return strava.load_activities_file(args.activities), today
+        # Symétrie avec le chemin --live plus bas : un fichier absent ou un JSON
+        # invalide doit dégrader en message clair, pas en traceback brut (#24).
+        try:
+            return strava.load_activities_file(args.activities), today
+        except FileNotFoundError:
+            raise SystemExit(f"Fichier d'activités introuvable : {args.activities}")
+        except (json.JSONDecodeError, OSError) as e:
+            raise SystemExit(f"Fichier d'activités illisible ({args.activities}) : {e}")
     if getattr(args, "live", False):
         try:
             token = strava.refresh_access_token()

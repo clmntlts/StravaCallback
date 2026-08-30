@@ -166,6 +166,61 @@ class TestDeliverGuards(unittest.TestCase):
         self.assertEqual(deliver._guess_mime("dashboard.html")[0], "text")
 
 
+class TestStravaRefreshErrors(unittest.TestCase):
+    """#20 : un refresh Strava en échec remonte le corps décodé, et un 400
+    (refresh_token expiré/révoqué) donne un message actionnable."""
+
+    @staticmethod
+    def _http_error(code, body):
+        import io
+        import urllib.error
+        return urllib.error.HTTPError(
+            url=strava.STRAVA_TOKEN_URL, code=code, msg="Bad Request",
+            hdrs=None, fp=io.BytesIO(body.encode("utf-8")))
+
+    def test_400_gives_actionable_regenerate_message_with_body(self):
+        from unittest import mock
+        err = self._http_error(400, '{"message":"Bad Request","errors":['
+                                     '{"field":"refresh_token","code":"invalid"}]}')
+        with mock.patch.object(strava, "_http", side_effect=err):
+            with self.assertRaises(RuntimeError) as ctx:
+                strava.refresh_access_token("id", "secret", "tok")
+        msg = str(ctx.exception)
+        self.assertIn("strava-auth-url", msg)          # remédiation
+        self.assertIn("refresh_token", msg)            # corps décodé remonté
+
+    def test_non_400_surfaces_status_and_body(self):
+        from unittest import mock
+        err = self._http_error(500, "upstream boom")
+        with mock.patch.object(strava, "_http", side_effect=err):
+            with self.assertRaises(RuntimeError) as ctx:
+                strava.refresh_access_token("id", "secret", "tok")
+        msg = str(ctx.exception)
+        self.assertIn("500", msg)
+        self.assertIn("upstream boom", msg)
+
+
+class TestActivitiesFileErrors(unittest.TestCase):
+    """#24 : fichier d'activités absent / JSON invalide → exception typée
+    (convertie en SystemExit clair côté CLI dans generate._load_activities)."""
+
+    def test_missing_file_raises_filenotfound(self):
+        with self.assertRaises(FileNotFoundError):
+            strava.load_activities_file("/nonexistent/does-not-exist.json")
+
+    def test_invalid_json_raises_jsondecode(self):
+        import json
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            f.write("{ not valid json")
+            path = f.name
+        try:
+            with self.assertRaises(json.JSONDecodeError):
+                strava.load_activities_file(path)
+        finally:
+            os.unlink(path)
+
+
 class TestGarminTranslate(unittest.TestCase):
     def test_interval_nests_repeat_block(self):
         w = garmin_workout.session_to_garmin(
