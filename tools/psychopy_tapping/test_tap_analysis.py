@@ -1,12 +1,18 @@
 """Tests : python3 -m unittest discover -s tools/psychopy_tapping"""
 
+import importlib.util
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+import analyser_tapping as app
 import tap_analysis as ta
+
+HAS_MPL = importlib.util.find_spec("matplotlib") is not None
 
 
 def row(**kwargs):
@@ -123,6 +129,79 @@ class FrameRateTests(unittest.TestCase):
 
     def test_plain_frame_rate(self):
         self.assertAlmostEqual(ta.guess_frame_rate(pd.DataFrame({"frameRate": [60.0]})), 60.0)
+
+
+def _fake_tables(n_participants=2, n_trials=4):
+    """Deux tables (essais / appuis) cohérentes, comme après analyse."""
+    trials, taps = [], []
+    for p in range(n_participants):
+        for t in range(n_trials):
+            times = np.arange(0, 3, 0.3) + 0.01 * t
+            row = {"file": f"p{p}.xlsx", "source_row": t + 2, "participant": 100 + p,
+                   "Condition": ["C", "I", "N"][t % 3]}
+            metrics = ta.trial_metrics(times.tolist())
+            trials.append(row | metrics)
+            for k, time in enumerate(times):
+                taps.append(row | {"tap_index": k, "time_s": time,
+                                   "iti_s": None if k == 0 else 0.3,
+                                   "is_pause": False})
+    return ta.add_labels(pd.DataFrame(trials), pd.DataFrame(taps))
+
+
+class LabelTests(unittest.TestCase):
+    def test_participant_id_and_trial_labels(self):
+        trials, taps = _fake_tables()
+        self.assertEqual(sorted(trials["participant_id"].unique()), ["100", "101"])
+        self.assertEqual(list(trials["trial_label"])[:2], ["E01 · C", "E02 · I"])
+        self.assertEqual(list(trials.groupby("participant_id")["trial_no"].max()), [4, 4])
+
+    def test_trial_key_joins_both_tables(self):
+        trials, taps = _fake_tables()
+        self.assertTrue(set(taps["trial_key"]) <= set(trials["trial_key"]))
+        self.assertEqual(taps["trial_label"].isna().sum(), 0)
+
+    def test_participant_id_falls_back_to_file_name(self):
+        trials = pd.DataFrame([{"file": "sujet_A.xlsx", "source_row": 2}])
+        taps = pd.DataFrame([{"file": "sujet_A.xlsx", "source_row": 2, "tap_index": 0}])
+        trials, _ = ta.add_labels(trials, taps)
+        self.assertEqual(trials.loc[0, "participant_id"], "sujet_A")
+
+
+class InputCollectionTests(unittest.TestCase):
+    def test_folder_scan_skips_generated_and_temp_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "donnees.xlsx").touch()
+            (root / "notes.txt").touch()
+            (root / "trials.csv").touch()          # sortie d'une analyse précédente
+            (root / "~$donnees.xlsx").touch()      # fichier temporaire Excel
+            (root / "analyse_tapping_2026").mkdir()
+            (root / "analyse_tapping_2026" / "taps_long.csv").touch()
+            found = app.collect_inputs([root])
+            self.assertEqual([f.name for f in found], ["donnees.xlsx"])
+
+    def test_explicit_files_are_kept_and_deduplicated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "a.csv"
+            f.touch()
+            self.assertEqual(app.collect_inputs([f, f]), [f])
+
+
+@unittest.skipUnless(HAS_MPL, "matplotlib absent")
+class PlotTests(unittest.TestCase):
+    def test_all_figure_families_are_produced(self):
+        import plots
+
+        trials, taps = _fake_tables()
+        with tempfile.TemporaryDirectory() as tmp:
+            written = plots.make_all(taps, trials, Path(tmp), group_cols=["Condition"])
+            names = {p.name for p in written}
+        self.assertTrue(all(p for p in names))
+        self.assertIn("participants_resume.png", names)
+        self.assertIn("conditions_Condition.png", names)
+        self.assertIn("conditions_Condition_distribution_iti.png", names)
+        self.assertTrue({"essais_100_raster.png", "essais_100_iti.png",
+                         "essais_100_resume.png"} <= names)
 
 
 if __name__ == "__main__":

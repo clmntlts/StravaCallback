@@ -426,98 +426,57 @@ def condition_summary(trials: pd.DataFrame, by: list[str]) -> pd.DataFrame:
     return out.reset_index()
 
 
-# ------------------------------------------------------------- graphiques ---
-
-PALETTE = {
-    "surface": "#fcfcfb", "ink": "#0b0b0b", "ink_soft": "#52514e",
-    "grid": "#dcdcd8", "series": "#2a78d6", "accent": "#eb6834",
-}
+# ------------------------------------------------------- étiquettes / export -
 
 
-def make_plots(taps: pd.DataFrame, trials: pd.DataFrame, out_dir: Path) -> list[Path]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+def add_labels(trials: pd.DataFrame, taps: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Ajoute `participant_id`, `trial_key` et `trial_label` aux deux tables.
 
-    plt.rcParams.update({
-        "figure.facecolor": PALETTE["surface"], "axes.facecolor": PALETTE["surface"],
-        "savefig.facecolor": PALETTE["surface"], "text.color": PALETTE["ink"],
-        "axes.labelcolor": PALETTE["ink_soft"], "xtick.color": PALETTE["ink_soft"],
-        "ytick.color": PALETTE["ink_soft"], "axes.edgecolor": PALETTE["grid"],
-        "grid.color": PALETTE["grid"], "font.size": 9,
-    })
-    labels = [f"{r.file[:12]} L{r.source_row}" for r in trials.itertuples()]
+    `trial_key` identifie un essai de façon unique (fichier + ligne source) et
+    sert de clé de jointure entre la table par essai et la table par appui.
+    """
+    for frame in (trials, taps):
+        if "participant" in frame.columns:
+            pid = frame["participant"].astype("string")
+            pid = pid.str.replace(r"\.0$", "", regex=True)
+        else:
+            pid = pd.Series(pd.NA, index=frame.index, dtype="string")
+        stem = frame["file"].astype("string").str.replace(r"\.[^.]+$", "", regex=True)
+        frame["participant_id"] = pid.fillna(stem)
+        frame["trial_key"] = frame["file"].astype(str) + "#" + frame["source_row"].astype(str)
+
+    trials = trials.sort_values(["participant_id", "file", "source_row"]).reset_index(drop=True)
+    trials["trial_no"] = trials.groupby("participant_id").cumcount() + 1
+    cond = trials["Condition"] if "Condition" in trials.columns else None
+    trials["trial_label"] = [
+        f"E{no:02d}" + (f" · {c}" if cond is not None and pd.notna(c) else "")
+        for no, c in zip(trials["trial_no"], cond if cond is not None else trials["trial_no"])
+    ]
+    taps = taps.merge(trials[["trial_key", "trial_no", "trial_label"]], on="trial_key",
+                      how="left")
+    return trials, taps
+
+
+def write_tables(trials: pd.DataFrame, taps: pd.DataFrame, summary: pd.DataFrame,
+                 out_dir: Path) -> list[Path]:
+    """Écrit les tables (CSV + classeur Excel) et renvoie les chemins écrits."""
+    out_dir.mkdir(parents=True, exist_ok=True)
     written = []
-
-    # 1) Raster : un rang par essai, un trait par tap, pauses en orange.
-    fig, ax = plt.subplots(figsize=(9, 0.42 * len(trials) + 1.6))
-    for y, r in enumerate(trials.itertuples()):
-        sub = taps[(taps["file"] == r.file) & (taps["source_row"] == r.source_row)]
-        ax.vlines(sub["time_s"], y - 0.32, y + 0.32, color=PALETTE["series"], lw=1.6)
-        gaps = sub[sub["is_pause"]]
-        for _, g in gaps.iterrows():
-            ax.hlines(y, g["time_s"] - g["iti_s"], g["time_s"],
-                      color=PALETTE["accent"], lw=2.4, alpha=0.85)
-    ax.set_yticks(range(len(trials)), labels)
-    ax.set_ylim(-0.8, len(trials) - 0.2)
-    ax.set_xlabel("temps depuis le début du composant (s)")
-    ax.set_title("Taps par essai — trait bleu : appui ; segment orange : pause", loc="left")
-    ax.grid(axis="x", lw=0.6, alpha=0.7)
-    for side in ("top", "right", "left"):
-        ax.spines[side].set_visible(False)
-    fig.tight_layout()
-    path = out_dir / "tap_raster.png"
-    fig.savefig(path, dpi=160)
-    plt.close(fig)
-    written.append(path)
-
-    # 2) Petits multiples : ITI au fil de l'essai (une série par panneau).
-    n = len(trials)
-    ncol = min(3, max(1, n))
-    nrow = math.ceil(n / ncol)
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 2.3 * nrow), squeeze=False)
-    for ax, (y, r) in zip(axes.ravel(), enumerate(trials.itertuples())):
-        sub = taps[(taps["file"] == r.file) & (taps["source_row"] == r.source_row)].dropna(subset=["iti_s"])
-        ax.plot(sub["tap_index"], sub["iti_s"] * 1000, color=PALETTE["series"], lw=2,
-                marker="o", ms=3.5)
-        med = sub["iti_s"].median() * 1000
-        ax.axhline(med, color=PALETTE["ink_soft"], lw=1, ls="--", alpha=0.6)
-        ax.set_title(f"{labels[y]} — {r.tap_rate_hz:.2f} Hz, CV {r.iti_cv:.2f}",
-                     loc="left", fontsize=9)
-        ax.set_xlabel("n° de tap")
-        ax.set_ylabel("ITI (ms)")
-        ax.grid(lw=0.6, alpha=0.7)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-    for ax in axes.ravel()[n:]:
-        ax.set_visible(False)
-    fig.tight_layout()
-    path = out_dir / "iti_series.png"
-    fig.savefig(path, dpi=160)
-    plt.close(fig)
-    written.append(path)
-
-    # 3) Résumé : cadence et variabilité, deux panneaux (jamais deux axes y).
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 0.35 * len(trials) + 2.2), sharey=True)
-    y = np.arange(len(trials))
-    ax1.hlines(y, 0, trials["tap_rate_hz"], color=PALETTE["grid"], lw=1.4)
-    ax1.plot(trials["tap_rate_hz"], y, "o", color=PALETTE["series"], ms=8)
-    ax1.set_xlabel("cadence (Hz)")
-    ax1.set_title("Cadence", loc="left")
-    ax2.hlines(y, 0, trials["clean_iti_cv"], color=PALETTE["grid"], lw=1.4)
-    ax2.plot(trials["clean_iti_cv"], y, "o", color=PALETTE["accent"], ms=8)
-    ax2.set_xlabel("CV des ITI hors pauses")
-    ax2.set_title("Irrégularité", loc="left")
-    for ax in (ax1, ax2):
-        ax.set_yticks(y, labels)
-        ax.grid(axis="x", lw=0.6, alpha=0.7)
-        for side in ("top", "right", "left"):
-            ax.spines[side].set_visible(False)
-    fig.tight_layout()
-    path = out_dir / "trial_summary.png"
-    fig.savefig(path, dpi=160)
-    plt.close(fig)
-    written.append(path)
+    trials.to_csv(out_dir / "trials.csv", index=False)
+    taps.to_csv(out_dir / "taps_long.csv", index=False)
+    written += [out_dir / "trials.csv", out_dir / "taps_long.csv"]
+    if not summary.empty:
+        summary.to_csv(out_dir / "summary.csv", index=False)
+        written.append(out_dir / "summary.csv")
+    try:
+        with pd.ExcelWriter(out_dir / "tapping_metrics.xlsx") as xw:
+            trials.to_excel(xw, sheet_name="trials", index=False)
+            taps.to_excel(xw, sheet_name="taps", index=False)
+            if not summary.empty:
+                summary.to_excel(xw, sheet_name="summary", index=False)
+        written.append(out_dir / "tapping_metrics.xlsx")
+    except ModuleNotFoundError:
+        print("[info] openpyxl absent : export .xlsx ignoré", file=sys.stderr)
     return written
 
 
@@ -562,27 +521,16 @@ def main(argv=None) -> int:
 
     trials = pd.concat(all_trials, ignore_index=True)
     taps = pd.concat(all_taps, ignore_index=True)
-
-    args.out.mkdir(parents=True, exist_ok=True)
-    trials.to_csv(args.out / "trials.csv", index=False)
-    taps.to_csv(args.out / "taps_long.csv", index=False)
+    trials, taps = add_labels(trials, taps)
     summary = condition_summary(trials, args.by)
-    if not summary.empty:
-        summary.to_csv(args.out / "summary.csv", index=False)
-    try:
-        with pd.ExcelWriter(args.out / "tapping_metrics.xlsx") as xw:
-            trials.to_excel(xw, sheet_name="trials", index=False)
-            taps.to_excel(xw, sheet_name="taps", index=False)
-            if not summary.empty:
-                summary.to_excel(xw, sheet_name="summary", index=False)
-    except ModuleNotFoundError:
-        print("[info] openpyxl absent : export .xlsx ignoré", file=sys.stderr)
+    write_tables(trials, taps, summary, args.out)
 
     if args.plots:
-        for path in make_plots(taps, trials, args.out):
+        import plots
+        for path in plots.make_all(taps, trials, args.out, group_cols=args.by):
             print(f"figure : {path}")
 
-    cols = ["file", "source_row", "Condition", "n_taps", "tap_rate_hz", "iti_mean",
+    cols = ["participant_id", "trial_label", "n_taps", "tap_rate_hz", "iti_mean",
             "iti_cv", "clean_iti_cv", "rmssd", "n_pauses", "isochrony_sd_s"]
     cols = [c for c in cols if c in trials.columns]
     print(f"\n{len(trials)} essai(s), {len(taps)} tap(s) — sorties dans {args.out}/\n")
